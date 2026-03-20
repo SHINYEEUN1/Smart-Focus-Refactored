@@ -5,11 +5,11 @@ const mysql = require("mysql2");
 // 사용할 db 정보 정의
 // host, user, password, port, database
 const db_info = {
-    host: "project-db-campus.smhrd.com",
-    user: "sc_25K_HI2_p2_1",
-    password: "smhrd1",
-    port: "3312",
-    database: "sc_25K_HI2_p2_1"
+    host: process.env.DB_HOST,
+    user:  process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    port: process.env.DB_PORT,
+    database: process.env.DB_NAME
 };
 
 // db연결 객체 생성
