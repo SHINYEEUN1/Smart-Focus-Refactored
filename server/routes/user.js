@@ -40,4 +40,49 @@ router.post('/join', async (req, res, next) => {
     }
 });
 
+// [POST] /user/login - 로그인
+router.post('/login', async (req, res, next) => {
+    const { email, pwd } = req.body; // DB 컬럼명과 일치시켜서 편리함!
+
+    try {
+        // 1. 해당 이메일 유저가 있는지 확인
+        const [users] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
+        
+        if (users.length === 0) {
+            return res.status(401).json({
+                success: false,
+                message: "가입되지 않은 이메일입니다.",
+                code: "USER_NOT_FOUND"
+            });
+        }
+
+        const user = users[0];
+
+        // 2. 비밀번호 비교 (사용자 입력 비번 vs DB 암호화 비번)
+        const isMatch = await bcrypt.compare(pwd, user.pwd);
+
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: "비밀번호가 일치하지 않습니다.",
+                code: "INVALID_PASSWORD"
+            });
+        }
+
+        // 3. 로그인 성공 응답 (민감한 정보인 pwd는 제외하고 보냄)
+        res.json({
+            success: true,
+            message: `${user.nick}님, 환영합니다!`,
+            user: {
+                user_idx: user.user_idx,
+                email: user.email,
+                nick: user.nick
+            }
+        });
+
+    } catch (err) {
+        next(err);
+    }
+});
+
 module.exports = router;
