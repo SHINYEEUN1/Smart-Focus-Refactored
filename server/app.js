@@ -2,6 +2,7 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const session = require('express-session');
 
 // 2. 서버 객체 만들기
 const app = express();
@@ -19,6 +20,18 @@ app.use(cors());
 //    json형식으로 오는 데이터를 js객체로 처리를 할 수 있게 변경 (8,9 미들웨어 설정)
 app.use(express.json());
 app.use(express.urlencoded({extended:true}));
+
+// 세션 설정
+app.use(session({
+    secret: process.env.SESSION_SECRET, // .env에 저장한 키
+    resave: false,
+    saveUninitialized: false,
+    rolling: true,
+    cookie: { 
+        maxAge: 1000 * 60 * 60, // 1시간 유지
+        secure: false 
+    }
+}));
 
 //dist폴더 접근 (정적 파일)
 app.use(express.static(path.join(__dirname, '../client/dist')));

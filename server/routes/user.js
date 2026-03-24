@@ -3,6 +3,19 @@ const router = express.Router();
 const pool = require('../config/database');
 const bcrypt = require('bcrypt');
 
+// [검문소] 로그인 여부를 체크하는 미들웨어 (여기에 추가!)
+const isAuthenticated = (req, res, next) => {
+    if (req.session.user) {
+        next(); // 세션이 있으면 통과!
+    } else {
+        res.status(401).json({
+            success: false,
+            message: "세션이 만료되었습니다. 다시 로그인해주세요.",
+            code: "SESSION_EXPIRED"
+        });
+    }
+};
+
 // [POST] /user/join - 회원가입
 router.post('/join', async (req, res, next) => {
     const { email, pwd, nick } = req.body;
@@ -69,20 +82,48 @@ router.post('/login', async (req, res, next) => {
             });
         }
 
-        // 3. 로그인 성공 응답 (민감한 정보인 pwd는 제외하고 보냄)
-        res.json({
-            success: true,
-            message: `${user.nick}님, 환영합니다!`,
-            user: {
-                user_idx: user.user_idx,
-                email: user.email,
-                nick: user.nick
-            }
-        });
+        // 3. 세션에 사용자 정보 기록 (추가된 부분)
+// 이제 서버는 브라우저가 보낸 쿠키를 보고 이 정보를 꺼내옵니다.
+req.session.user = {
+    user_idx: user.user_idx,
+    email: user.email,
+    nick: user.nick
+};
+
+// 4. 로그인 성공 응답 (수정된 부분)
+res.json({
+    success: true,
+    message: `${user.nick}님, 환영합니다!`,
+    user: req.session.user // 세션에 저장된 정보를 그대로 응답!
+});
 
     } catch (err) {
         next(err);
     }
+});
+
+// [POST] /user/logout - 로그아웃 (새로 추가할 부분!)
+router.post('/logout', (req, res) => {
+    // 1. 서버 메모리에 있는 세션 보따리 파괴
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({ success: false, message: "로그아웃 중 에러 발생" });
+        }
+        
+        // 2. 브라우저에 남은 쿠키(입장권 번호표)도 삭제
+        // express-session의 기본 쿠키 이름은 'connect.sid'입니다.
+        res.clearCookie('connect.sid'); 
+        
+        res.json({ success: true, message: "로그아웃 되었습니다." });
+    });
+});
+
+router.get('/check', isAuthenticated, (req, res) => {
+    res.json({
+        success: true,
+        message: "로그인 상태입니다!",
+        user: req.session.user
+    });
 });
 
 module.exports = router;
