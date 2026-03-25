@@ -1,7 +1,8 @@
 import React from 'react';
 import AuthLayout from '../components/AuthLayout';
 
-export default function Login({ onNavigate }) {
+// ✨ [핵심 수정] App.jsx에서 넘겨준 setIsLoggedIn을 받아옵니다.
+export default function Login({ onNavigate, setIsLoggedIn }) {
   const handleLogin = async (e) => {
     e.preventDefault();
     const email = e.target.email.value;
@@ -11,11 +12,15 @@ export default function Login({ onNavigate }) {
       const res = await fetch('http://localhost:3000/user/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', 
         body: JSON.stringify({ email, pwd })
       });
       const data = await res.json();
+      
       if (res.ok && data.success) {
         alert(data.message); 
+        // ✨ [핵심 수정] 로그인에 성공했으니 상단 헤더 메뉴도 로그인 상태로 바꾸라고 명령합니다!
+        setIsLoggedIn(true); 
         onNavigate('dashboard');
       } else {
         alert(data.message || '로그인에 실패했습니다.');
