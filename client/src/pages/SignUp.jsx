@@ -1,7 +1,7 @@
 import React from 'react';
 import AuthLayout from '../components/AuthLayout';
 
-export default function SignUp({ onNavigate }) {
+export default function SignUp({ onNavigate, setIsLoggedIn }) {
   const handleSignUp = async (e) => {
     e.preventDefault();
     const nick = e.target.nick.value;
@@ -9,15 +9,33 @@ export default function SignUp({ onNavigate }) {
     const pwd = e.target.pwd.value;
 
     try {
+      // 1. 회원가입 요청
       const res = await fetch('http://localhost:3000/user/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nick, email, pwd })
       });
       const data = await res.json();
+      
       if (res.ok && data.success) {
-        alert(data.message || '가입 완료! 로그인 해주세요.');
-        onNavigate('login');
+        alert("회원가입이 완료되었습니다! 자동으로 로그인합니다. 🎉");
+        
+        // ✨ [핵심 수정] 가입 성공 후 즉시 로그인을 시도합니다.
+        const loginRes = await fetch('http://localhost:3000/user/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include', // 세션 쿠키 발급을 위해 필요
+          body: JSON.stringify({ email, pwd })
+        });
+        const loginData = await loginRes.json();
+        
+        if (loginData.success) {
+          setIsLoggedIn(true); // 로그인 상태 스위치 켜기
+          onNavigate('dashboard'); // 대시보드로 즉시 이동
+        } else {
+          // 혹시라도 자동 로그인이 실패하면 로그인 페이지로 안내
+          onNavigate('login');
+        }
       } else {
         alert(data.message || '회원가입 실패. 다시 시도해주세요.');
       }

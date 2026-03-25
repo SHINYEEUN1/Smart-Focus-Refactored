@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
-// 💡 분리된 파일들을 불러옵니다.
 import Logo from './components/Logo';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -13,9 +12,9 @@ import MyPage from './pages/MyPage';
 export default function App() {
   const [activePage, setActivePage] = useState('home');
   const [isLoading, setIsLoading] = useState(true);
-  
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  // 1. 앱 실행 시 세션 체크 (로그인 유지 확인)
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -27,7 +26,6 @@ export default function App() {
         
         if (data.success) {
           setIsLoggedIn(true);
-          // 새로고침 시에만 대시보드로 이동하게 둡니다.
           setActivePage('dashboard');
         } else {
           setIsLoggedIn(false);
@@ -41,6 +39,7 @@ export default function App() {
     checkSession();
   }, []);
 
+  // 2. 로그아웃 처리
   const handleLogout = async () => {
     try {
       const res = await fetch('http://localhost:3000/user/logout', {
@@ -69,11 +68,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#Eef2f6] font-sans selection:bg-indigo-100">
-      
-      {/* 🎨 헤더 영역 */}
       <header className="bg-[#24223E] px-8 py-5 flex justify-between items-center shadow-xl sticky top-0 z-50 border-b border-white/5">
-        
-        {/* ✨ [수정] 로그인 여부와 상관없이 무조건 'home'으로 가도록 원상복구했습니다! */}
         <div className="flex-1 cursor-pointer" onClick={() => setActivePage('home')}>
           <Logo />
         </div>
@@ -111,9 +106,16 @@ export default function App() {
       </header>
       
       <main>
-        {activePage === 'home' && <Home onStart={() => setActivePage('signup')} />}
+        {/* ✨ [수정] 홈 화면 버튼 클릭 시, 로그인 여부에 따라 목적지를 다르게 설정합니다. */}
+        {activePage === 'home' && (
+          <Home onStart={() => setActivePage(isLoggedIn ? 'dashboard' : 'signup')} />
+        )}
+        
         {activePage === 'login' && <Login onNavigate={setActivePage} setIsLoggedIn={setIsLoggedIn} />}
-        {activePage === 'signup' && <SignUp onNavigate={setActivePage} />}
+        
+        {/* ✨ [수정] 가입 후 바로 대시보드로 보내기 위해 setIsLoggedIn을 넘겨줍니다. */}
+        {activePage === 'signup' && <SignUp onNavigate={setActivePage} setIsLoggedIn={setIsLoggedIn} />}
+        
         {activePage === 'dashboard' && <Dashboard />}
         {activePage === 'report' && <Report />}
         {activePage === 'mypage' && <MyPage />}
