@@ -18,12 +18,12 @@ const io = new Server(server, {        // [추가] 소켓 서버 연결 및 CORS
 
 // [추가] 분석 엔진 가져오기 (파일이 utils 폴더에 있어야 함)
 const { 
-    detectCameraMode, 
-    analyzeNoiseLevel, 
-    checkUserPresence, 
-    analyzePosture, 
-    getCoachingMessage 
-} = require('./utils/analysisEngine');
+    detect_camera_mode, 
+    analyze_noise_level, 
+    check_user_presence, 
+    analyze_posture, 
+    get_coaching_message 
+} = require('./utils/analysis_engine');
 
 // 3. 포트 번호 지정
 app.set('port', process.env.PORT||3000);
@@ -59,42 +59,45 @@ app.use(express.static(path.join(__dirname, '../client/dist')));
 // ---------------------------------------------------------
 // [추가] 5단계: 실시간 분석 소켓 로직 (라우터 설정 근처가 좋습니다)
 // ---------------------------------------------------------
+// ---------------------------------------------------------
+// [최종] 6단계: 실시간 분석 소켓 로직 (snake_case 적용)
+// ---------------------------------------------------------
 io.on('connection', (socket) => {
     console.log('클라이언트와 소켓 연결됨! ID:', socket.id);
 
-    // [6단계 추가] 엔진 준비 완료 신호 전송
-    // 리액트에서 이 신호를 받으면 "분석 중..." 로딩 스피너를 끕니다.
+    // 엔진 준비 완료 신호 전송
     socket.emit('engine_ready', { 
         status: 'READY',
         message: '실시간 AI 분석 엔진이 가동되었습니다.' 
     });
 
     socket.on('stream_data', (data) => {
-        const { landmarks, noiseDb } = data;
+        // 리액트 팀원에게 data도 { landmarks, noise_db }로 보내달라고 요청하세요!
+        const { landmarks, noise_db } = data; 
 
         // 1. 사용자 이탈 예외 처리
-        if (!checkUserPresence(landmarks)) {
+        if (!check_user_presence(landmarks)) {
             return socket.emit('analysis_result', {
                 status: 'USER_NOT_FOUND',
                 message: '사용자를 찾는 중입니다...' 
             });
         }
 
-        // 2. [6단계 핵심] 통합 분석 (모드 + 소음 + 자세)
-        const cameraMode = detectCameraMode(landmarks);
-        const noiseStatus = analyzeNoiseLevel(noiseDb);
-        const postureStatus = analyzePosture(landmarks); // 자세 분석 추가
+        // 2. 통합 분석 실행
+        const camera_mode = detect_camera_mode(landmarks);
+        const noise_status = analyze_noise_level(noise_db);
+        const posture_status = analyze_posture(landmarks);
         
-        // 3. [6단계 핵심] 분석 결과에 따른 코칭 메시지 생성
-        const coachingMsg = getCoachingMessage(postureStatus, noiseStatus);
+        // 3. 코칭 메시지 생성
+        const coaching_msg = get_coaching_message(posture_status, noise_status);
 
-        // 4. 결과 전송 (리액트로 모든 데이터를 한 번에 쏴줍니다)
+        // 4. 결과 전송 (모든 결과값도 snake_case로 통일)
         socket.emit('analysis_result', {
             status: 'SUCCESS',
-            cameraMode,     // FRONT_VIEW / SIDE_VIEW
-            noiseStatus,    // QUIET / NORMAL / NOISY
-            postureStatus,  // GOOD_POSTURE / SLUMPED / LEANING_ON_HAND
-            message: coachingMsg, // "턱 괴지 마세요!" 같은 실제 텍스트
+            camera_mode,     
+            noise_status,    
+            posture_status,  
+            message: coaching_msg,
             timestamp: new Date()
         });
     });
@@ -103,7 +106,6 @@ io.on('connection', (socket) => {
         console.log('클라이언트 접속 종료');
     });
 });
-// ---------------------------------------------------------
 
 // 5. 만들어둔 라우터 설계도(index.js) 가져오기
 const mainRouter = require('./routes/main');
