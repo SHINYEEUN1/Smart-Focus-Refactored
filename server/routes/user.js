@@ -55,47 +55,52 @@ router.post('/join', async (req, res, next) => {
 
 // [POST] /user/login - 로그인
 router.post('/login', async (req, res, next) => {
-    const { email, pwd } = req.body; // DB 컬럼명과 일치시켜서 편리함!
+    const { email, pwd } = req.body;
 
     try {
         // 1. 해당 이메일 유저가 있는지 확인
         const [users] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
         
+        // [보안 규격] 유저가 없어도 '비밀번호가 틀린 것'과 동일한 메시지를 보냅니다.
         if (users.length === 0) {
-            return res.status(401).json({
+            return res.status(400).json({
                 success: false,
-                message: "가입되지 않은 이메일입니다.",
-                code: "USER_NOT_FOUND"
+                message: "이메일 또는 비밀번호가 일치하지 않습니다.",
+                code: "LOGIN_FAILED"
             });
         }
 
-        const user = users[0];
+        const user = users[0]; // DB에서 가져온 로우 데이터
 
-        // 2. 비밀번호 비교 (사용자 입력 비번 vs DB 암호화 비번)
+        // 2. 비밀번호 비교
         const isMatch = await bcrypt.compare(pwd, user.pwd);
 
         if (!isMatch) {
-            return res.status(401).json({
+            return res.status(400).json({
                 success: false,
-                message: "비밀번호가 일치하지 않습니다.",
-                code: "INVALID_PASSWORD"
+                message: "이메일 또는 비밀번호를 확인해주세요.",
+                code: "LOGIN_FAILED"
             });
         }
 
-        // 3. 세션에 사용자 정보 기록 (추가된 부분)
-// 이제 서버는 브라우저가 보낸 쿠키를 보고 이 정보를 꺼내옵니다.
-req.session.user = {
-    user_idx: user.user_idx,
-    email: user.email,
-    nick: user.nick
-};
+        // 🔥 [수정 포인트] 보안을 위해 pwd만 쏙 빼고 나머지를 user_info에 담기
+        // user 객체에서 pwd라는 키를 찾아 제외하고, 나머지를 user_info라는 새 객체에 모읍니다.
+        const { pwd: _, ...user_info } = user;
 
-// 4. 로그인 성공 응답 (수정된 부분)
-res.json({
-    success: true,
-    message: `${user.nick}님, 환영합니다!`,
-    user: req.session.user // 세션에 저장된 정보를 그대로 응답!
-});
+        // 3. 세션에 사용자 정보 기록
+        // 이제 서버 세션과 응답 데이터에 비밀번호가 포함되지 않습니다.
+        req.session.user = user_info;
+
+        console.log("===== 세션 저장 완료 =====");
+        console.log(req.session.user); // 여기에 유저 정보가 출력되어야 함
+        console.log("세션 ID:", req.sessionID); 
+        console.log("========================");
+        // 4. 로그인 성공 응답
+        res.json({
+            success: true,
+            message: `${user_info.nick}님, 환영합니다!`,
+            user_info: req.session.user // 리액트 팀원과 약속한 'user_info' 키값 사용
+        });
 
     } catch (err) {
         next(err);
@@ -118,12 +123,20 @@ router.post('/logout', (req, res) => {
     });
 });
 
-router.get('/check', isAuthenticated, (req, res) => {
-    res.json({
-        success: true,
-        message: "로그인 상태입니다!",
-        user: req.session.user
-    });
+router.get('/check', (req, res) => {
+    // 세션에 저장된 유저 데이터가 있는지 확인
+    if (req.session.user) {
+        // DB 컬럼명(ex: user_id, user_nick)이 포함된 객체를 그대로 응답
+        res.json({
+            success: true,
+            user_info: req.session.user // 세션에 담긴 DB 로우(row) 데이터를 그대로 보냄
+        });
+    } else {
+        res.json({
+            success: false,
+            message: "비회원 상태입니다."
+        });
+    }
 });
 
 module.exports = router;
