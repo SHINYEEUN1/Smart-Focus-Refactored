@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './App.css';
 
-// 💡 방금 우리가 쪼개서 만든 파일들을 다 불러옵니다!
+// 💡 분리된 파일들을 불러옵니다.
 import Logo from './components/Logo';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -16,11 +16,15 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#Eef2f6] font-sans selection:bg-indigo-100">
       
+      {/* 🎨 헤더 영역 */}
       <header className="bg-[#24223E] px-8 py-5 flex justify-between items-center shadow-xl sticky top-0 z-50 border-b border-white/5">
-        <div onClick={() => setActivePage('home')}>
+        
+        {/* 💡 [수정 포인트] 로고 영역에 flex-1을 추가하여 로고가 왼쪽 공간을 차지하게 만듭니다. */}
+        <div className="flex-1" onClick={() => setActivePage('home')}>
           <Logo />
         </div>
         
+        {/* 💡 [자동 정렬] 이제 로고가 왼쪽 공간을 다 채웠으므로, 이 네비게이션 메뉴는 자연스럽게 화면 중앙으로 옵니다. */}
         <nav className="hidden md:flex space-x-2 bg-white/5 p-1.5 rounded-2xl border border-white/10">
           {[
             { id: 'dashboard', l: '대시보드' },
@@ -37,7 +41,8 @@ export default function App() {
           ))}
         </nav>
 
-        <div className="flex gap-4 items-center">
+        {/* 💡 [자동 정렬] 이 영역도 flex-1을 주어 로고 영역과 대칭을 이루게 만들어 중앙 정렬을 더 확고히 합니다. */}
+        <div className="flex-1 flex gap-4 items-center justify-end">
           {['home', 'login', 'signup'].includes(activePage) ? (
             <div className="flex gap-4">
               <button onClick={() => setActivePage('login')} className="text-sm font-black text-indigo-200 hover:text-white transition-colors">로그인</button>

@@ -6,7 +6,7 @@ export default function Home({ onStart }) {
     <div className="flex items-center justify-center min-h-[85vh] animate-fade-in">
       <Card className="max-w-2xl w-full text-center p-12 py-20 border-none shadow-2xl rounded-[3rem]">
         <div className="inline-block px-5 py-2 bg-indigo-50 text-indigo-600 rounded-full font-black text-sm mb-6 tracking-widest shadow-sm">
-          MOLIP AI COACH V2.0
+          Smart Focus
         </div>
         <h1 className="text-5xl md:text-6xl font-black text-slate-900 mb-6 leading-tight tracking-tight">
           당신의 몰입을 위한<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-[#5B44F2] to-[#818CF8]">지능형 AI 코치</span>

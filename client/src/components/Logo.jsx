@@ -12,7 +12,7 @@ export default function Logo({ isDarkBg = true }) {
           Smart Focus
         </span>
         <span className="text-[0.55rem] font-bold tracking-[0.15em] text-[#818CF8] mt-1 uppercase">
-          Health & Molip Coach
+          AI POSTURE & FOCUS COACH
         </span>
       </div>
     </div>
