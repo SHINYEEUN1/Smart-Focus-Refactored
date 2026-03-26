@@ -1,64 +1,151 @@
 import React from 'react';
-import Card from '../components/Card';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, PointElement,
+  LineElement, Title, Tooltip, Legend, Filler
+} from 'chart.js';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 export default function Report() {
-  const weeklyData = [
-    { day: '월', score: 55 }, { day: '화', score: 72 }, { day: '수', score: 95 }, 
-    { day: '목', score: 45 }, { day: '금', score: 88 }, { day: '토', score: 100 }, { day: '일', score: 65 }
-  ];
+  // 💡 백엔드 연동 전 화면 디자인을 위한 더미 데이터
+  const dummyData = {
+    summary: {
+      time: "03:45:20",
+      score: 88,
+      warnings: 5
+    },
+    chart: {
+      labels: ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00'],
+      scores: [80, 85, 92, 60, 88, 95, 90],
+      noises: [40, 38, 45, 65, 42, 35, 40]
+    },
+    logs: [
+      { id: 1, time: '14:20', type: 'GOOD', msg: '바른 자세를 아주 잘 유지하고 있습니다.' },
+      { id: 2, time: '11:45', type: 'WARNING', msg: '거북목 자세가 감지되었습니다. 허리를 펴주세요.' },
+      { id: 3, time: '11:30', type: 'NOISE', msg: '주변 소음이 증가하여 몰입도가 하락했습니다.' },
+    ]
+  };
+
+  // 차트 디자인 설정 (깔끔한 라인과 부드러운 곡선)
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { 
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1e293b',
+        padding: 12,
+        titleFont: { size: 13, family: 'pretendard' },
+        bodyFont: { size: 13, family: 'pretendard' },
+        cornerRadius: 8,
+      }
+    },
+    scales: { 
+      y: { beginAtZero: true, max: 100, border: { dash: [4, 4] }, grid: { color: '#f1f5f9' } },
+      x: { grid: { display: false } }
+    },
+    interaction: { intersect: false, mode: 'index' },
+  };
+
+  const lineData = {
+    labels: dummyData.chart.labels,
+    datasets: [
+      {
+        label: '몰입도 (%)',
+        data: dummyData.chart.scores,
+        borderColor: '#4f46e5',
+        backgroundColor: 'rgba(79, 70, 229, 0.05)',
+        borderWidth: 3,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+      },
+      {
+        label: '소음 (dB)',
+        data: dummyData.chart.noises,
+        borderColor: '#94a3b8',
+        borderWidth: 2,
+        borderDash: [5, 5],
+        tension: 0.4,
+        pointRadius: 0,
+      }
+    ]
+  };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-fade-in py-12 px-6">
-      <div className="flex justify-between items-end border-b border-slate-200 pb-6 mt-4">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 p-6 md:p-10 font-sans animate-fade-in">
+      
+      {/* 1. 페이지 헤더 */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
         <div>
-          <h2 className="text-3xl font-black text-slate-800 tracking-tight">분석 리포트</h2>
-          <p className="text-slate-500 mt-2 font-bold text-lg">주간 나의 몰입 패턴을 시각적으로 확인하세요.</p>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 mb-1">Analytics Report</h2>
+          <p className="text-slate-500 font-medium">나의 집중 패턴과 자세 분석 결과를 확인하세요.</p>
         </div>
-        <div className="bg-white px-6 py-3 rounded-2xl border border-slate-200 text-sm font-black text-slate-600 shadow-sm">📅 2026. 03. 23</div>
+        <div className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold shadow-sm text-slate-600 flex items-center gap-2 cursor-pointer hover:bg-slate-50 transition-colors">
+          📅 오늘 (2026.03.26) 
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+        </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <Card className="bg-gradient-to-br from-[#5B44F2] to-[#7E69FF] text-white border-none p-10 shadow-lg shadow-[#5B44F2]/20">
-          <p className="font-bold opacity-90 mb-2">총 몰입 시간</p>
-          <p className="text-4xl font-black tracking-tighter">12.5h</p>
-        </Card>
-        <Card className="p-10 flex flex-col justify-center border-indigo-100 hover:shadow-md transition-shadow">
-          <p className="text-slate-400 font-black mb-2 uppercase tracking-widest text-xs">평균 집중 점수</p>
-          <p className="text-4xl font-black text-slate-900">88<span className="text-2xl ml-1 text-[#5B44F2]">%</span></p>
-        </Card>
-        <Card className="p-10 flex flex-col justify-center border-emerald-100 hover:shadow-md transition-shadow">
-          <p className="text-emerald-500 font-black mb-2 uppercase tracking-widest text-xs">자세 개선율</p>
-          <p className="text-4xl font-black text-emerald-500">+15<span className="text-2xl ml-1 text-emerald-500">%</span></p>
-        </Card>
+
+      {/* 2. 최상단 요약 카드 (Summary) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {[
+          { label: '총 집중 시간', value: dummyData.summary.time, unit: '', icon: '⏱️', color: 'text-indigo-600' },
+          { label: '평균 몰입도', value: dummyData.summary.score, unit: '%', icon: '⚡', color: 'text-emerald-500' },
+          { label: '자세 경고 횟수', value: dummyData.summary.warnings, unit: '회', icon: '🚨', color: 'text-rose-500' }
+        ].map((item, idx) => (
+          <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-5 hover:shadow-md transition-shadow">
+            <div className={`w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center text-2xl border border-slate-100 ${item.color}`}>
+              {item.icon}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-400 mb-1">{item.label}</p>
+              <p className="text-2xl font-bold text-slate-800 tracking-tight">
+                {item.value}<span className="text-lg text-slate-400 font-medium ml-1">{item.unit}</span>
+              </p>
+            </div>
+          </div>
+        ))}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card className="p-8 hover:shadow-md transition-shadow flex flex-col">
-          <h3 className="font-black text-slate-800 text-xl mb-8 flex items-center gap-2"><div className="w-2 h-6 bg-[#5B44F2] rounded-full"></div>주간 몰입도 추이</h3>
-          <div className="flex-grow bg-slate-50 rounded-3xl flex items-end justify-between p-6 px-8 min-h-[250px]">
-             {weeklyData.map((data, i) => (
-               <div key={i} className="flex flex-col items-center group w-full h-full justify-end">
-                 <div className="w-full flex justify-center h-[200px] items-end relative">
-                   <div style={{ height: `${data.score}%` }} className={`w-8 sm:w-10 rounded-t-xl transition-all duration-700 ease-out relative ${data.score < 50 ? 'bg-rose-400' : data.score < 75 ? 'bg-amber-400' : 'bg-[#5B44F2]'} opacity-85 group-hover:opacity-100`}>
-                     <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-xs font-bold py-1.5 px-2.5 rounded-lg shadow-lg transition-opacity z-10">{data.score}점</div>
-                   </div>
-                 </div>
-                 <span className="text-sm font-bold text-slate-400 mt-4 tracking-tight">{data.day}</span>
-               </div>
-             ))}
+
+      {/* 3. 메인 콘텐츠 (차트 & 로그) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* 그래프 섹션 */}
+        <div className="lg:col-span-2 bg-white p-7 rounded-2xl border border-slate-100 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-slate-800">시간대별 몰입 트렌드</h3>
+            <div className="flex gap-4 text-sm font-semibold text-slate-500">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>몰입도</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-400"></span>소음</span>
+            </div>
           </div>
-        </Card>
-        <Card className="p-8 border-indigo-100 hover:shadow-md transition-shadow flex flex-col">
-          <h3 className="font-black text-slate-800 text-xl mb-8 flex items-center gap-2"><div className="w-2 h-6 bg-[#5B44F2] rounded-full"></div>상세 세션 로그</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-               <thead className="text-slate-400 font-bold border-b border-slate-100"><tr><th className="p-4 pl-2">일시</th><th className="p-4">유지 시간</th><th className="p-4">최종 점수</th></tr></thead>
-               <tbody className="divide-y divide-slate-50 text-slate-700 font-medium">
-                 {[{ date: '2026.03.17', time: '5h', score: '80%' }, { date: '2026.03.18', time: '6h 30m', score: '82%' }, { date: '2026.03.19', time: '7h', score: '84%' }, { date: '2026.03.20', time: '8h 15m', score: '86%' }].map((log, i) => (
-                   <tr key={i} className="hover:bg-slate-50 transition-colors"><td className="p-4 pl-2">{log.date}</td><td className="p-4 font-mono text-slate-500">{log.time}</td><td className="p-4 font-black text-slate-900">{log.score}</td></tr>
-                 ))}
-               </tbody>
-            </table>
+          <div className="h-[300px] w-full">
+            <Line data={lineData} options={chartOptions} />
           </div>
-        </Card>
+        </div>
+
+        {/* AI 피드백 타임라인 섹션 */}
+        <div className="bg-white p-7 rounded-2xl border border-slate-100 shadow-sm flex flex-col h-[400px] lg:h-auto">
+          <h3 className="text-lg font-bold text-slate-800 mb-6">AI 코칭 타임라인</h3>
+          <div className="flex-1 overflow-y-auto pr-2 space-y-5">
+            {dummyData.logs.map(log => (
+              <div key={log.id} className="flex gap-4 group">
+                <div className="flex flex-col items-center">
+                  <div className={`w-3 h-3 rounded-full mt-1.5 ring-4 ring-white ${log.type === 'GOOD' ? 'bg-emerald-400' : log.type === 'WARNING' ? 'bg-rose-400' : 'bg-amber-400'}`}></div>
+                  <div className="w-0.5 h-full bg-slate-100 mt-2 group-last:hidden"></div>
+                </div>
+                <div className="pb-4">
+                  <span className="text-xs font-bold text-slate-400 mb-1 block">{log.time}</span>
+                  <p className="text-sm font-medium text-slate-700 leading-snug">{log.msg}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
       </div>
     </div>
   );
