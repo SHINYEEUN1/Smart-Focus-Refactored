@@ -4,7 +4,6 @@ const db = require('../config/database'); // DB 설정 파일 경로
 
 /**
  * [1] 집중 시작 API (POST /api/immersion/start)
- * 
  */
 router.post('/start', async (req, res) => {
     const { user_idx } = req.body;
@@ -16,67 +15,74 @@ router.post('/start', async (req, res) => {
         const sql = "INSERT INTO immersions (user_idx, imm_date, start_time, imm_score) VALUES (?, ?, ?, 0)";
         const [result] = await db.query(sql, [user_idx, imm_date, start_time]);
         
-        // 리액트 작업자에게 이 imm_idx를 꼭 써서 로그를 보내달라고 가이드해야 합니다.
+        // 생성된 imm_idx를 리턴하여 이후 로그 기록 시 사용하게 합니다.
         res.json({ success: true, imm_idx: result.insertId });
     } catch (err) {
         console.error("세션 시작 실패:", err);
-        res.status(500).json({ success: false });
+        res.status(500).json({ success: false, message: "세션 시작 중 오류 발생" });
     }
 });
 
 /**
- * [2] 실시간 중요 이벤트 기록 API (보강 버전)
+ * [2] 실시간 중요 이벤트 기록 API
  */
 router.post('/log', async (req, res) => {
-    const { imm_idx, noise, pose, client_time } = req.body; 
+    const { imm_idx, noise, pose } = req.body; 
 
     try {
-        // 1. 중복 체크 (선택 사항: 같은 세션에 같은 시간에 기록된 로그가 있는지 확인)
-        // 리액트가 재시도할 때 똑같은 데이터를 또 보낼 수 있기 때문입니다.
-        
-        // 2. 소음 데이터 저장
+        // 1. 소음 데이터 저장 (reliability 컬럼 반영)
         if (noise) {
             const noiseSql = `
-                INSERT INTO noises (imm_idx, decibel, obj_name, detected_at) 
-                SELECT ?, ?, ?, NOW()
+                INSERT INTO noises (imm_idx, decibel, obj_name, reliability, detected_at) 
+                SELECT ?, ?, ?, ?, CURRENT_TIMESTAMP
                 WHERE NOT EXISTS (
                     SELECT 1 FROM noises 
-                    WHERE imm_idx = ? AND detected_at >= DATE_SUB(NOW(), INTERVAL 1 SECOND)
-                    AND decibel = ?
+                    WHERE imm_idx = ? 
+                      AND detected_at >= DATE_SUB(NOW(), INTERVAL 1 SECOND)
+                      AND decibel = ?
                 )
             `;
-            // 1초 이내에 동일한 데시벨 데이터가 이미 있다면 저장을 건너뜁니다.
-            await db.query(noiseSql, [imm_idx, noise.decibel, noise.obj_name, imm_idx, noise.decibel]);
+            await db.query(noiseSql, [
+                imm_idx, 
+                noise.decibel, 
+                noise.obj_name, 
+                noise.reliability || 0, // 데이터 없을 시 0 기본값
+                imm_idx, 
+                noise.decibel
+            ]);
         }
 
-        // 3. 자세 데이터 저장
+        // 2. 자세 데이터 저장 (pose_status 등 DB 명세 반영)
         if (pose) {
             const poseSql = `
                 INSERT INTO poses (imm_idx, pose_status, pose_type, detected_at) 
                 SELECT ?, ?, ?, NOW()
                 WHERE NOT EXISTS (
                     SELECT 1 FROM poses 
-                    WHERE imm_idx = ? AND detected_at >= DATE_SUB(NOW(), INTERVAL 1 SECOND)
-                    AND pose_status = ?
+                    WHERE imm_idx = ? 
+                      AND detected_at >= DATE_SUB(NOW(), INTERVAL 1 SECOND)
+                      AND pose_status = ?
                 )
             `;
-            await db.query(poseSql, [imm_idx, pose.pose_status, pose.pose_type, imm_idx, pose.pose_status]);
+            await db.query(poseSql, [
+                imm_idx, 
+                pose.pose_status, 
+                pose.pose_type, 
+                imm_idx, 
+                pose.pose_status
+            ]);
         }
 
         res.json({ success: true });
     } catch (err) {
-        // DB가 꽉 찼거나 일시적 오류일 때 503 코드를 주어 리액트가 '나중에 재시도'하게 유도
-        console.error("[RETRY LOG] 데이터 저장 실패:", err.message);
-        res.status(503).json({ 
-            success: false, 
-            message: "Server busy, please retry later" 
-        });
+        console.error("[LOG ERROR] 데이터 저장 실패:", err.message);
+        // 에러 발생 시 리액트가 재시도할 수 있도록 503 또는 500 전송
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
 /**
  * [3] 집중 종료 API (POST /api/immersion/end)
- * 리액트: "공부 끝! 최종 성적표야" -> 서버: "기록표 완성해서 닫을게"
  */
 router.post('/end', async (req, res) => {
     const { imm_idx, imm_score } = req.body;
@@ -94,22 +100,57 @@ router.post('/end', async (req, res) => {
 
 /**
  * [4] 리포트 데이터 조회 API (GET /api/immersion/report/:imm_idx)
- * 리액트 작업자가 만든 Report.jsx 화면에 뿌려줄 데이터를 가져오는 입구입니다.
  */
 router.get('/report/:imm_idx', async (req, res) => {
     const { imm_idx } = req.params;
     
     try {
-        // 아직 8단계 로직을 다 짜진 않았지만, 
-        // 리액트 작업자가 페이지를 열었을 때 404 에러가 나지 않도록 응답 형식을 맞춰둡니다.
+        // 1. 기본 세션 정보 및 총 집중 시간(초) 계산
+        // TIMESTAMPDIFF를 사용하여 시작~종료 사이의 전체 시간을 초 단위로 가져옵니다.
+        const [info] = await db.query(`
+            SELECT *, 
+                   TIMESTAMPDIFF(SECOND, CONCAT(imm_date, ' ', start_time), CONCAT(imm_date, ' ', end_time)) AS total_seconds
+            FROM immersions 
+            WHERE imm_idx = ?`, [imm_idx]);
+
+        if (info.length === 0) {
+            return res.status(404).json({ success: false, message: "해당 세션을 찾을 수 없습니다." });
+        }
+
+        // 2. 소음 통계 (평균 데시벨 + 가장 빈번한 소음 종류)
+        // 서브쿼리를 사용해 가장 많이 발생한 소음 이름(top_noise)을 함께 가져옵니다.
+        const [noise] = await db.query(`
+            SELECT 
+                ROUND(AVG(decibel), 1) as avg_decibel, 
+                COUNT(*) as total_count,
+                (SELECT obj_name FROM noises WHERE imm_idx = ? GROUP BY obj_name ORDER BY COUNT(*) DESC LIMIT 1) as top_noise
+            FROM noises 
+            WHERE imm_idx = ?`, [imm_idx, imm_idx]);
+
+        // 3. 자세 통계 (자세별 빈도수 정렬)
+        const [poses] = await db.query(`
+            SELECT pose_status, COUNT(*) as count 
+            FROM poses 
+            WHERE imm_idx = ? 
+            GROUP BY pose_status
+            ORDER BY count DESC`, [imm_idx]);
+
+        // 리액트 작업자가 사용하기 편하도록 구조화하여 응답
         res.json({ 
             success: true, 
-            message: "리포트 데이터를 준비 중입니다.",
-            dummy_status: true // 나중에 실제 데이터로 교체할 예정
+            data: {
+                session: info[0],
+                noise_summary: {
+                    average: noise[0].avg_decibel || 0,
+                    count: noise[0].total_count,
+                    main_obstacle: noise[0].top_noise || "없음" // 가장 방해된 소음
+                },
+                pose_summary: poses
+            }
         });
     } catch (err) {
         console.error("리포트 조회 실패:", err);
-        res.status(500).json({ success: false });
+        res.status(500).json({ success: false, message: "리포트 생성 중 오류 발생" });
     }
 });
 
