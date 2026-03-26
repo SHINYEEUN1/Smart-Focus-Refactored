@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
+// 💡 1. 페이지 이동을 위한 useNavigate 도구 불러오기
+import { useNavigate } from 'react-router-dom'; 
 import Card from '../components/Card';
 import { evaluateSmartFocus, resetStaticTracking } from '../SFEngine';
 import { io } from 'socket.io-client';
 
 export default function Dashboard() {
+  const navigate = useNavigate(); // 💡 라우터 네비게이션 활성화
+
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const cameraRef = useRef(null);
@@ -17,6 +21,11 @@ export default function Dashboard() {
   const calibrationRef = useRef(null); 
   const needsCalibrationRef = useRef(false);
   const lastSentTimeRef = useRef(0); 
+
+  // 💡 2. 서버에서 받은 세션 번호(imm_idx)를 저장할 Ref와 State
+  // (State는 UI 업데이트용, Ref는 소켓/인터벌 등 비동기 함수 안에서 최신값을 보기 위해 둘 다 사용합니다)
+  const [currentImmIdx, setCurrentImmIdx] = useState(null);
+  const currentImmIdxRef = useRef(null);
 
   const [decibel, setDecibel] = useState(0); 
   const [isFocusing, setIsFocusing] = useState(false); 
@@ -60,6 +69,21 @@ export default function Dashboard() {
           imm_score: `${finalScore}%`, 
           decibel: `${decibelRef.current} dB` 
         }, ...prev].slice(0, 5));
+
+        // 💡 3. [이벤트 로그 API 연동] 자세가 나쁘거나 소음이 기준치 이상일 때만 DB에 기록 전송
+        if (currentImmIdxRef.current && (currentStatus !== 'NORMAL' || decibelRef.current >= 60)) {
+           fetch('http://localhost:3000/api/immersion/log', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  imm_idx: currentImmIdxRef.current,
+                  noise: decibelRef.current >= 60 ? { decibel: decibelRef.current, obj_name: "NOISE", reliability: 0.9 } : null,
+                  pose: currentStatus !== 'NORMAL' ? { pose_status: backendPosture, pose_type: 'BAD' } : null
+              }),
+              credentials: 'include'
+           }).catch(err => console.error("로그 전송 에러:", err));
+        }
+
       } else {
         setServerFeedback(data.message); 
       }
@@ -118,7 +142,6 @@ export default function Dashboard() {
     pose.onResults((res) => {
       if (!canvasRef.current) return;
 
-      // ✨ [수정] 어깨 인식이 안 될 경우 안내 메시지 출력
       if (!res.poseLandmarks) {
         setServerFeedback("⚠️ 어깨가 보이지 않습니다! 상체가 보이도록 카메라 앞에 바르게 앉아주세요.");
         setServerStatus('--');
@@ -146,7 +169,6 @@ export default function Dashboard() {
     if (videoRef.current) {
       cameraRef.current = new SafeCamera(videoRef.current, { 
         onFrame: async () => { 
-          // 에러 방지용 체크
           if (videoRef.current && poseRef.current && faceMeshRef.current) { 
             try {
               await poseRef.current.send({ image: videoRef.current }); 
@@ -172,15 +194,81 @@ export default function Dashboard() {
     setDisplayScore('--');
   };
 
+  // 💡 4. 측정 시작 및 API 호출
+  const handleStartMeasurement = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/api/immersion/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_idx: 1 }), // 임시 user_idx 세팅
+        credentials: 'include'
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setCurrentImmIdx(data.imm_idx);
+        currentImmIdxRef.current = data.imm_idx; // Ref에도 즉시 반영
+        
+        setIsFocusing(true); 
+        setFocusSeconds(0); 
+        resetStaticTracking(); 
+        setHistoryLog([]); 
+        startCamera();
+      } else {
+        alert("세션 시작에 실패했습니다.");
+      }
+    } catch (err) {
+      console.error("측정 시작 에러:", err);
+      alert("서버 통신 중 에러가 발생했습니다.");
+    }
+  };
+
+  // 💡 5. 측정 종료 및 리포트 이동 로직
+  const handleStopMeasurement = async () => {
+    setIsFocusing(false); 
+    stopCamera();
+
+    if (!currentImmIdxRef.current) return;
+
+    try {
+      // 마지막 표시된 점수 (기본값 0)
+      const finalScore = displayScore === '--' ? 0 : parseInt(displayScore, 10);
+
+      const res = await fetch('http://localhost:3000/api/immersion/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imm_idx: currentImmIdxRef.current,
+          imm_score: finalScore
+        }),
+        credentials: 'include'
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        alert("집중 수고하셨습니다! 분석 리포트로 이동합니다.");
+        navigate(`/report/${currentImmIdxRef.current}`); // 🚀 목표 달성! 리포트 페이지로 쓩~
+      } else {
+        alert("측정 기록 저장에 실패했습니다.");
+      }
+    } catch (err) {
+      console.error("측정 종료 에러:", err);
+    }
+  };
+
   return (
     <div className="w-full bg-[#Eef2f6] min-h-[90vh] p-6 lg:p-10 animate-fade-in font-sans">
       <div className="flex justify-between items-center mb-8">
         <h2 className="text-xl font-black text-slate-800 tracking-tight">Focus Analysis Dashboard</h2>
         <div className="flex gap-3 items-center">
-          <button onClick={() => { if (!isFocusing) { setIsFocusing(true); setFocusSeconds(0); resetStaticTracking(); setHistoryLog([]); startCamera(); } else { setIsFocusing(false); stopCamera(); } }} 
-            className={`px-8 py-3 rounded-xl font-bold shadow-lg transition-all ${isFocusing ? 'bg-white text-rose-500 border border-rose-100 hover:bg-rose-50' : 'bg-[#5B44F2] text-white hover:bg-[#4a36c4]'}`}>
+          {/* 💡 6. 새로 만든 함수들을 버튼에 연결 */}
+          <button 
+            onClick={isFocusing ? handleStopMeasurement : handleStartMeasurement} 
+            className={`px-8 py-3 rounded-xl font-bold shadow-lg transition-all ${isFocusing ? 'bg-white text-rose-500 border border-rose-100 hover:bg-rose-50' : 'bg-[#5B44F2] text-white hover:bg-[#4a36c4]'}`}
+          >
             {isFocusing ? '■ 측정 종료' : '▶ 측정 시작'}
           </button>
+          
           {isFocusing && <button onClick={() => { needsCalibrationRef.current = true; alert("영점 조절 완료!"); }} className="px-6 py-3 bg-white text-slate-700 border border-slate-300 rounded-xl font-bold shadow-sm hover:bg-slate-50 transition-colors">🎯 영점 조절</button>}
         </div>
       </div>
