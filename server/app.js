@@ -110,11 +110,11 @@ io.on('connection', (socket) => {
 // 5. 만들어둔 라우터 설계도(index.js) 가져오기
 const mainRouter = require('./routes/main');
 const userRouter = require('./routes/user');
-
+const immersionRouter = require('./routes/immersion');
 // 6. '/'로 들어오면 indexRouter로 보내야해요.
 app.use('/', mainRouter);
 app.use('/user', userRouter);
-
+app.use('/api/immersion', immersionRouter);
 // 7. dist폴더안에 접근하는 코드
 //app.use(express.static(path.join(__dirname, '../client/dist')));
 
