@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// 💡 1. URL 주소를 감지하고 이동시켜줄 리액트 라우터 도구들을 불러옵니다.
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import './App.css';
 
@@ -12,14 +11,12 @@ import Report from './pages/Report';
 import MyPage from './pages/MyPage';
 
 export default function App() {
-  // 💡 2. 이제 activePage 상태 대신 URL 주소를 직접 다룹니다.
   const navigate = useNavigate();
-  const location = useLocation(); // 현재 URL 주소를 알 수 있는 도구
+  const location = useLocation(); 
 
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // 앱 실행 시 세션 체크
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -31,11 +28,7 @@ export default function App() {
         
         if (data.success) {
           setIsLoggedIn(true);
-          // 💡 처음 접속했을 때 루트 주소('/')일 경우에만 대시보드로 이동
-          // (리포트 화면에서 새로고침 했을 때 튕기는 현상 방지)
-          if (location.pathname === '/') {
-            navigate('/dashboard');
-          }
+          // 💡 [핵심 수정] 강제로 대시보드로 보내는 navigate('/dashboard') 로직 삭제
         } else {
           setIsLoggedIn(false);
         }
@@ -46,9 +39,8 @@ export default function App() {
       }
     };
     checkSession();
-  }, [location.pathname]); // 주소가 바뀔 때마다 체크
+  }, []); // 💡 [핵심 수정] location.pathname 감시를 없애서, 앱 켤 때 딱 한 번만 세션을 체크하도록 변경
 
-  // 로그아웃 처리
   const handleLogout = async () => {
     try {
       const res = await fetch('http://localhost:3000/user/logout', {
@@ -60,7 +52,7 @@ export default function App() {
       if (data.success) {
         alert("성공적으로 로그아웃 되었습니다.");
         setIsLoggedIn(false);
-        navigate('/'); // 💡 로그아웃 시 메인 화면('/')으로 이동
+        navigate('/'); 
       }
     } catch (err) {
       console.error("로그아웃 에러:", err);
@@ -75,7 +67,6 @@ export default function App() {
     );
   }
 
-  // 💡 기존 Login/SignUp 컴포넌트가 고장나지 않도록 연결해주는 헬퍼 함수
   const handleNavigate = (page) => {
     if (page === 'home') navigate('/');
     else navigate(`/${page}`);
@@ -97,8 +88,7 @@ export default function App() {
             ].map((nav) => (
               <button 
                 key={nav.id} 
-                onClick={() => navigate(nav.path)} // 💡 메뉴 클릭 시 URL 변경
-                // 💡 현재 URL 주소에 nav.path가 포함되어 있으면 보라색으로 활성화
+                onClick={() => navigate(nav.path)} 
                 className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${
                   location.pathname.startsWith(nav.path) ? 'bg-[#5B44F2] text-white shadow-xl' : 'text-slate-400 hover:text-white hover:bg-white/10'
                 }`}
@@ -124,17 +114,13 @@ export default function App() {
       </header>
       
       <main>
-        {/* 💡 3. 조건부 렌더링(if문) 대신 Routes를 사용하여 URL 주소에 맞는 컴포넌트만 띄워줍니다! */}
         <Routes>
           <Route path="/" element={<Home onStart={() => navigate(isLoggedIn ? '/dashboard' : '/signup')} />} />
           <Route path="/login" element={<Login onNavigate={handleNavigate} setIsLoggedIn={setIsLoggedIn} />} />
           <Route path="/signup" element={<SignUp onNavigate={handleNavigate} setIsLoggedIn={setIsLoggedIn} />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          
-          {/* 💡 /report 또는 /report/1 모두 처리할 수 있도록 라우트 분리 */}
           <Route path="/report" element={<Report />} />
           <Route path="/report/:imm_idx" element={<Report />} />
-          
           <Route path="/mypage" element={<MyPage />} />
         </Routes>
       </main>
