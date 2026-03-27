@@ -1,8 +1,9 @@
 import React from 'react';
 import AuthLayout from '../components/AuthLayout';
 
-// ✨ [핵심 수정] App.jsx에서 넘겨준 setIsLoggedIn을 받아옵니다.
+// 외부에서 쓸 수 있게 export default가 꼭 있어야 합니다!
 export default function Login({ onNavigate, setIsLoggedIn }) {
+  
   const handleLogin = async (e) => {
     e.preventDefault();
     const email = e.target.email.value;
@@ -19,7 +20,12 @@ export default function Login({ onNavigate, setIsLoggedIn }) {
       
       if (res.ok && data.success) {
         alert(data.message); 
-        // ✨ [핵심 수정] 로그인에 성공했으니 상단 헤더 메뉴도 로그인 상태로 바꾸라고 명령합니다!
+        
+        // ✨ 핵심 픽스: 로그인 성공 시 백엔드가 준 내 진짜 유저 정보를 로컬스토리지에 저장!
+        if (data.user_info) {
+          localStorage.setItem('user_info', JSON.stringify(data.user_info));
+        }
+
         setIsLoggedIn(true); 
         onNavigate('dashboard');
       } else {

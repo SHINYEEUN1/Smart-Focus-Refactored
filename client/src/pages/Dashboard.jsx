@@ -53,10 +53,8 @@ export default function Dashboard() {
         setServerFeedback(data.message);
         setServerStatus(currentStatus);
 
-        const baseScore = currentStatus === 'NORMAL' ? 95 : currentStatus === 'CAUTION' ? 70 : 40;
-        const randomVariation = Math.floor(Math.random() * 5) - 2;
-        const finalScore = baseScore + randomVariation;
-
+        // 백엔드에서 보내준 점수 화면에 적용
+        const finalScore = data.current_score || 0; 
         setDisplayScore(finalScore);
 
         const time = new Date().toLocaleTimeString('ko-KR');
@@ -67,18 +65,6 @@ export default function Dashboard() {
           decibel: `${decibelRef.current} dB`
         }, ...prev].slice(0, 5));
 
-        if (currentImmIdxRef.current) {
-          fetch('http://localhost:3000/api/immersion/log', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              imm_idx: currentImmIdxRef.current,
-              noise: { decibel: decibelRef.current, obj_name: decibelRef.current >= 60 ? "NOISE" : "NORMAL", reliability: 0.9 },
-              pose: { pose_status: backendPosture || 'GOOD_POSTURE', pose_type: currentStatus !== 'NORMAL' ? 'BAD' : 'GOOD' }
-            }),
-            credentials: 'include'
-          }).catch(err => console.error("로그 전송 에러:", err));
-        }
       } else {
         setServerFeedback(data.message);
       }
@@ -157,7 +143,9 @@ export default function Dashboard() {
         lastSentTimeRef.current = now;
         
         if (socketRef.current) {
+          // 백엔드가 DB에 제대로 저장할 수 있도록 imm_idx 필수 전송!
           socketRef.current.emit('stream_data', { 
+            imm_idx: currentImmIdxRef.current, 
             landmarks: res.poseLandmarks, 
             noise_db: decibelRef.current,
             calibration: calibrationRef.current,
@@ -199,10 +187,14 @@ export default function Dashboard() {
 
   const handleStartMeasurement = async () => {
     try {
+      const userInfoStr = localStorage.getItem('user_info');
+      const userInfo = userInfoStr ? JSON.parse(userInfoStr) : null;
+      const actualUserIdx = userInfo ? userInfo.user_idx : 1;
+
       const res = await fetch('http://localhost:3000/api/immersion/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_idx: 1 }),
+        body: JSON.stringify({ user_idx: actualUserIdx }),
         credentials: 'include'
       });
       const data = await res.json();
@@ -259,7 +251,6 @@ export default function Dashboard() {
   const displayStatusLabel = serverStatus === 'WARNING' ? '위험' : serverStatus === 'CAUTION' ? '주의' : serverStatus === 'NORMAL' ? '정상' : '--';
 
   return (
-    // 💡 UI 동기화: 전역 배경(index.css)이 자연스럽게 깔리도록 최상단 컨테이너의 bg 클래스를 완전히 비웠습니다.
     <div className="max-w-[1400px] mx-auto min-h-[90vh] p-6 lg:p-10 animate-fade-in font-sans selection:bg-indigo-100">
 
       <div className="flex justify-between items-center mb-10 pb-6 border-b border-slate-200/60">
@@ -295,7 +286,6 @@ export default function Dashboard() {
             { label: '몰입 에너지', value: displayScore, unit: '%', icon: '⚡', color: 'text-emerald-500', bgColor: 'bg-emerald-50' },
             { label: '주변 소음', value: decibel, unit: 'dB', icon: '🎧', color: 'text-slate-500', bgColor: 'bg-slate-100' }
           ].map((item, idx) => (
-            // 내부에 있는 카드들은 하얗게 띄워서 가독성 확보
             <div key={idx} className="bg-white p-7 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-6 transition-all hover:shadow-md hover:-translate-y-1">
               <div className={`w-16 h-16 rounded-full ${item.bgColor} flex items-center justify-center text-3xl border border-white/50 shadow-inner ${item.color}`}>
                 {item.icon}

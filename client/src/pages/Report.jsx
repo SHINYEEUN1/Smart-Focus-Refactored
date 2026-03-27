@@ -44,15 +44,16 @@ export default function Report() {
             .filter(pose => pose.pose_status !== 'GOOD_POSTURE' && pose.pose_status !== 'NORMAL')
             .reduce((sum, pose) => sum + pose.count, 0);
 
-          const rawChartData = chart_data?.map(item => {
-            let s = item.imm_score;
-            if (s === undefined || s === null || s <= 0) {
-              s = 95 - (item.decibel > 40 ? (item.decibel - 30) : 0);
-              s += Math.floor(Math.random() * 5) - 2;
-              s = Math.max(30, Math.min(100, s));
-            }
-            return { label: item.time_label, score: s, noise: item.decibel };
-          }) || [];
+          let rawChartData = chart_data?.map(item => ({
+            label: item.time_label, 
+            score: item.imm_score || 0,
+            noise: item.decibel || 0
+          })) || [];
+
+          // 백엔드 데이터가 1개뿐이면 선을 그리기 위해 시각적으로만 똑같은 점을 하나 더 복제해줍니다.
+          if (rawChartData.length === 1) {
+            rawChartData.push({ ...rawChartData[0], label: '종료 시점' });
+          }
 
           const MAX_POINTS = 60;
           let processedData = rawChartData;
@@ -78,7 +79,7 @@ export default function Report() {
               time: `${hrs}:${mins}:${secs}`,
               score: session.imm_score || 0,
               warnings: totalWarnings,
-              mainNoise: noise_summary.main_obstacle || "없음"
+              mainNoise: noise_summary?.main_obstacle || "없음"
             },
             chart: {
               labels: processedData.map(d => d.label),
@@ -134,7 +135,6 @@ export default function Report() {
 
   if (isLoading) {
     return (
-      // 💡 로딩 화면 컨테이너 배경색 비우기 (투명도 유지)
       <div className="min-h-[85vh] flex flex-col items-center justify-center gap-4">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
         <p className="text-slate-500 font-bold tracking-widest animate-pulse">데이터를 분석하는 중입니다...</p>
@@ -142,15 +142,17 @@ export default function Report() {
     );
   }
 
+  // 옹졸했던 에러 화면 다시 프리미엄 레이아웃으로 복구!
   if (!reportData) {
     return (
-      // 💡 에러 화면 컨테이너 배경색 비우기 (투명도 유지)
-      <div className="min-h-[85vh] flex items-center justify-center p-4 md:p-6">
-        <div className="max-w-md w-full bg-white p-8 md:p-12 rounded-3xl shadow-sm border border-slate-100 text-center">
-          <div className="text-6xl mb-6 opacity-40">📊</div>
-          <h2 className="text-2xl font-black text-slate-800 mb-2">분석 데이터를 찾을 수 없습니다</h2>
-          <p className="text-slate-500 mb-8 font-medium">아직 기록된 세션이 없거나 삭제된 데이터입니다.</p>
-          <button onClick={() => navigate('/dashboard')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-500 transition-all shadow-lg active:scale-95">대시보드로 돌아가기</button>
+      <div className="max-w-[1400px] mx-auto min-h-[85vh] flex items-center justify-center p-4">
+        <div className="max-w-xl w-full bg-white p-12 rounded-3xl shadow-sm border border-slate-200 text-center flex flex-col items-center gap-4">
+          <div className="text-7xl mb-4 opacity-50">📭</div>
+          <h2 className="text-3xl font-black text-slate-800 tracking-tight">분석 데이터를 찾을 수 없습니다</h2>
+          <p className="text-slate-500 text-lg mb-8 font-medium break-keep">아직 기록된 세션이 없거나 서버에서 데이터를 가져오지 못했습니다.</p>
+          <button onClick={() => navigate('/dashboard')} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-200 active:scale-95 text-lg">
+            대시보드로 돌아가기
+          </button>
         </div>
       </div>
     );
@@ -220,7 +222,6 @@ export default function Report() {
   };
 
   return (
-    // 💡 메인 리포트 화면: max-w 설정으로 중앙 정렬 및 배경 완전 투명화
     <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans selection:bg-indigo-100" ref={reportRef}>
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-10 pb-6 border-b border-slate-200/60 gap-4 md:gap-0">
