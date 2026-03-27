@@ -13,26 +13,26 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 
 export default function Report() {
   const navigate = useNavigate();
-  const { imm_idx } = useParams(); 
-  
-  const [reportData, setReportData] = useState(null); 
+  const { imm_idx } = useParams();
+
+  const [reportData, setReportData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const reportRef = useRef(null);
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     const fetchReportData = async () => {
-      const targetIdx = imm_idx || 1; 
+      const targetIdx = imm_idx || 1;
 
       try {
         setIsLoading(true);
         const response = await fetch(`http://localhost:3000/api/immersion/report/${targetIdx}`, {
           method: 'GET',
-          credentials: 'include' 
+          credentials: 'include'
         });
         const result = await response.json();
-        
+
         if (result.success && result.data) {
           const { session, noise_summary, pose_summary, chart_data } = result.data;
 
@@ -49,7 +49,7 @@ export default function Report() {
             let s = item.imm_score;
             if (s === undefined || s === null || s <= 0) {
               s = 95 - (item.decibel > 40 ? (item.decibel - 30) : 0);
-              s += Math.floor(Math.random() * 5) - 2; 
+              s += Math.floor(Math.random() * 5) - 2;
               s = Math.max(30, Math.min(100, s));
             }
             return { label: item.time_label, score: s, noise: item.decibel };
@@ -57,7 +57,7 @@ export default function Report() {
 
           const MAX_POINTS = 60;
           let processedData = rawChartData;
-          
+
           if (rawChartData.length > MAX_POINTS) {
             const chunkSize = Math.ceil(rawChartData.length / MAX_POINTS);
             processedData = [];
@@ -75,20 +75,20 @@ export default function Report() {
 
           setReportData({
             summary: {
-              date: session.imm_date, 
+              date: session.imm_date,
               time: `${hrs}:${mins}:${secs}`,
               score: session.imm_score || 0,
               warnings: totalWarnings,
-              mainNoise: noise_summary.main_obstacle || "없음" 
+              mainNoise: noise_summary.main_obstacle || "없음"
             },
-            chart: { 
-              labels: processedData.map(d => d.label), 
-              scores: processedData.map(d => d.score), 
-              noises: processedData.map(d => d.noise) 
+            chart: {
+              labels: processedData.map(d => d.label),
+              scores: processedData.map(d => d.score),
+              noises: processedData.map(d => d.noise)
             }
           });
         } else {
-          setReportData(null); 
+          setReportData(null);
         }
       } catch (error) {
         console.error("데이터 로드 에러:", error);
@@ -104,25 +104,25 @@ export default function Report() {
   // 🚀 [해결됨] html-to-image를 사용한 새롭고 안정적인 PDF 저장 함수
   const handleExportPDF = async () => {
     if (!reportRef.current) return;
-    setIsExporting(true); 
-    
+    setIsExporting(true);
+
     setTimeout(async () => {
       try {
         // html2canvas 대신 toPng 호출. 브라우저 네이티브 엔진을 써서 oklch 등 모든 CSS 완벽 지원
-        const dataUrl = await toPng(reportRef.current, { 
+        const dataUrl = await toPng(reportRef.current, {
           backgroundColor: '#f8fafc',
           pixelRatio: 2 // 고화질 옵션 유지
         });
-        
+
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const imgProps = pdf.getImageProperties(dataUrl);
         const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        
+
         pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        
-        const safeDate = reportData?.summary?.date 
-          ? String(reportData.summary.date).substring(0, 10) 
+
+        const safeDate = reportData?.summary?.date
+          ? String(reportData.summary.date).substring(0, 10)
           : 'report';
 
         pdf.save(`Focus_Report_${safeDate}.pdf`);
@@ -130,14 +130,14 @@ export default function Report() {
         console.error('PDF 저장 실패 상세 에러:', err);
         alert(`PDF 생성 중 오류가 발생했습니다.`);
       } finally {
-        setIsExporting(false); 
+        setIsExporting(false);
       }
-    }, 500); 
+    }, 500);
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc] gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center  gap-4">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
         <p className="text-slate-500 font-bold tracking-widest animate-pulse">데이터를 분석하는 중입니다...</p>
       </div>
@@ -146,7 +146,7 @@ export default function Report() {
 
   if (!reportData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] p-4 md:p-6">
+      <div className="min-h-screen flex items-center justify-center  p-4 md:p-6">
         <div className="max-w-md w-full bg-white p-8 md:p-12 rounded-3xl shadow-sm border border-slate-100 text-center">
           <div className="text-6xl mb-6 opacity-40">📊</div>
           <h2 className="text-2xl font-black text-slate-800 mb-2">분석 데이터를 찾을 수 없습니다</h2>
@@ -166,8 +166,8 @@ export default function Report() {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: false, 
-    plugins: { 
+    animation: false,
+    plugins: {
       legend: { display: false },
       tooltip: {
         backgroundColor: 'rgba(15, 23, 42, 0.9)',
@@ -177,14 +177,14 @@ export default function Report() {
         cornerRadius: 8,
       }
     },
-    scales: { 
-      y: { 
-        beginAtZero: true, 
-        max: 100, 
-        border: { display: false }, 
-        grid: { color: '#f1f5f9', drawBorder: false } 
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 100,
+        border: { display: false },
+        grid: { color: '#f1f5f9', drawBorder: false }
       },
-      x: { 
+      x: {
         grid: { display: false },
         ticks: { color: '#94a3b8', font: { size: 11 }, maxTicksLimit: 10 }
       }
@@ -198,7 +198,7 @@ export default function Report() {
       {
         label: '몰입 에너지 (%)',
         data: reportData.chart.scores,
-        borderColor: '#5B44F2', 
+        borderColor: '#5B44F2',
         backgroundColor: 'rgba(91, 68, 242, 0.08)',
         borderWidth: 3,
         fill: true,
@@ -221,22 +221,22 @@ export default function Report() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 p-4 sm:p-6 md:p-10 font-sans selection:bg-indigo-100" ref={reportRef}>
-      
+    <div className="min-h-screen  text-slate-800 p-4 sm:p-6 md:p-10 font-sans selection:bg-indigo-100" ref={reportRef}>
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-10 pb-6 border-b border-slate-200/60 gap-4 md:gap-0">
         <div>
           <h2 className="text-2xl md:text-3xl font-black tracking-tighter text-slate-900 mb-1">종합 분석 리포트</h2>
           <p className="text-sm md:text-base text-slate-500 font-medium">측정된 집중 패턴 및 주변 환경에 대한 상세 분석 결과를 확인해 보세요.</p>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs md:text-sm font-bold shadow-sm text-slate-600 flex items-center gap-2 cursor-default">
             📅 측정일 : {formattedDate}
           </div>
-          
+
           {!isExporting && (
-            <button 
-              onClick={handleExportPDF} 
+            <button
+              onClick={handleExportPDF}
               className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs md:text-sm font-bold shadow-md hover:bg-slate-700 transition-all flex items-center gap-2"
             >
               📥 PDF 저장
@@ -270,12 +270,12 @@ export default function Report() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 md:mb-8 px-2 gap-3 sm:gap-0">
           <h3 className="text-base md:text-lg font-bold text-slate-900 tracking-tight">시간대별 몰입 트렌드 분석</h3>
           <div className="flex gap-4 md:gap-5 text-xs md:text-sm font-bold text-slate-500">
-             <span className="flex items-center gap-2">
-               <span className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-[#5B44F2] shadow-[0_0_10px_rgba(91,68,242,0.4)]"></span>몰입 에너지
-             </span>
-             <span className="flex items-center gap-2">
-               <span className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full border-2 border-[#cbd5e1] border-dashed"></span>주변 소음
-             </span>
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-[#5B44F2] shadow-[0_0_10px_rgba(91,68,242,0.4)]"></span>몰입 에너지
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full border-2 border-[#cbd5e1] border-dashed"></span>주변 소음
+            </span>
           </div>
         </div>
         <div className="h-[250px] sm:h-[300px] md:h-[400px] w-full">

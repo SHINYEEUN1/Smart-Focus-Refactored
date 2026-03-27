@@ -261,8 +261,8 @@ export default function Dashboard() {
   const displayStatusLabel = serverStatus === 'WARNING' ? '위험' : serverStatus === 'CAUTION' ? '주의' : serverStatus === 'NORMAL' ? '정상' : '--';
 
   return (
-    <div className="w-full bg-[#f8fafc] min-h-[90vh] p-6 lg:p-10 animate-fade-in font-sans selection:bg-indigo-100">
-      
+    <div className="w-full min-h-[90vh] p-6 lg:p-10 animate-fade-in font-sans selection:bg-indigo-100">
+
       {/* 💡 헤더 영역 한글화 */}
       <div className="flex justify-between items-center mb-10 pb-6 border-b border-slate-100">
         <div>
@@ -271,8 +271,8 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-4 items-center">
           {isFocusing && (
-            <button 
-              onClick={() => { needsCalibrationRef.current = true; alert("기준점(영점) 설정이 완료되었습니다!"); }} 
+            <button
+              onClick={() => { needsCalibrationRef.current = true; alert("기준점(영점) 설정이 완료되었습니다!"); }}
               className="px-6 py-3.5 bg-white text-slate-700 border border-slate-200 rounded-2xl font-bold shadow-sm hover:bg-slate-50 transition-all hover:border-slate-300 active:scale-95 flex items-center gap-2"
             >
               🎯 기준점 재설정
@@ -280,11 +280,10 @@ export default function Dashboard() {
           )}
           <button
             onClick={isFocusing ? handleStopMeasurement : handleStartMeasurement}
-            className={`px-10 py-3.5 rounded-2xl font-black shadow-lg transition-all active:scale-95 flex items-center gap-2 ${
-              isFocusing 
-                ? 'bg-white text-rose-600 border border-rose-100 hover:bg-rose-50 shadow-rose-100' 
-                : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-100'
-            }`}
+            className={`px-10 py-3.5 rounded-2xl font-black shadow-lg transition-all active:scale-95 flex items-center gap-2 ${isFocusing
+              ? 'bg-white text-rose-600 border border-rose-100 hover:bg-rose-50 shadow-rose-100'
+              : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-100'
+              }`}
           >
             {isFocusing ? '■ 측정 종료' : '▶ 측정 시작'}
           </button>
@@ -292,7 +291,7 @@ export default function Dashboard() {
       </div>
 
       <div className="flex flex-col gap-8">
-        
+
         {/* 💡 요약 카드 한글화 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
@@ -315,7 +314,7 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
+
           {/* 💡 카메라 영역 한글화 */}
           <div className="lg:col-span-8 flex flex-col h-full">
             <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex-grow">
@@ -323,11 +322,11 @@ export default function Dashboard() {
                 <h3 className="font-bold text-slate-900 text-lg tracking-tight">실시간 AI 비전 분석</h3>
                 {isFocusing && engineResult && <div className="bg-slate-50 px-3.5 py-1.5 rounded-full flex items-center gap-2 text-slate-500 text-xs font-bold border border-slate-100"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>AI 분석 활성화됨</div>}
               </div>
-              
+
               <div className="w-full aspect-[4/3] bg-slate-950 rounded-2xl relative overflow-hidden shadow-2xl shadow-slate-200">
                 <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover transform -scale-x-100 opacity-95" />
                 <canvas ref={canvasRef} className="absolute inset-0 w-full h-full transform -scale-x-100 z-10" width="640" height="480" />
-                
+
                 {!isFocusing && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 z-20 text-white gap-4">
                     <div className="text-6xl"></div>
@@ -348,21 +347,20 @@ export default function Dashboard() {
           <div className="lg:col-span-4 flex flex-col gap-6 h-full">
             <div className="p-8 py-10 rounded-3xl bg-slate-950 text-white shadow-2xl shadow-slate-300 flex flex-col items-center text-center flex-grow">
               <h3 className="font-bold text-indigo-300 text-xs uppercase tracking-widest mb-12 border-b border-indigo-900/50 w-full pb-4">현재 몰입 상태</h3>
-              
-              <div className={`w-32 h-32 rounded-full flex items-center justify-center mb-10 border-8 transition-all duration-500 relative ${
-                serverStatus === 'WARNING' ? 'border-rose-600 shadow-[0_0_40px_rgba(225,29,72,0.4)]' : 
-                serverStatus === 'CAUTION' ? 'border-amber-500 shadow-[0_0_40px_rgba(245,158,11,0.4)]' : 
-                serverStatus === 'NORMAL' ? 'border-emerald-500 shadow-[0_0_40px_rgba(16,185,129,0.4)]' : 
-                'border-slate-700'
-              }`}>
+
+              <div className={`w-32 h-32 rounded-full flex items-center justify-center mb-10 border-8 transition-all duration-500 relative ${serverStatus === 'WARNING' ? 'border-rose-600 shadow-[0_0_40px_rgba(225,29,72,0.4)]' :
+                serverStatus === 'CAUTION' ? 'border-amber-500 shadow-[0_0_40px_rgba(245,158,11,0.4)]' :
+                  serverStatus === 'NORMAL' ? 'border-emerald-500 shadow-[0_0_40px_rgba(16,185,129,0.4)]' :
+                    'border-slate-700'
+                }`}>
                 {isFocusing && <div className={`absolute inset-0 rounded-full animate-ping opacity-20 ${serverStatus === 'WARNING' ? 'bg-rose-600' : serverStatus === 'CAUTION' ? 'bg-amber-500' : serverStatus === 'NORMAL' ? 'bg-emerald-500' : ''}`}></div>}
                 <span className="font-black text-3xl tracking-tighter z-10">{displayStatusLabel}</span>
               </div>
-              
+
               <p className="font-bold text-slate-200 mb-12 break-keep text-base leading-relaxed max-w-[280px] min-h-[56px] flex items-center justify-center">
                 {serverFeedback}
               </p>
-              
+
               <div className="w-full mt-auto">
                 <div className="flex justify-between items-center mb-2 text-xs font-semibold text-slate-400">
                   <span>현재 소음 수준 (dB)</span>
@@ -405,16 +403,14 @@ export default function Dashboard() {
                   <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-5 pl-8 text-slate-600 font-mono font-bold text-xs">{log.detected_at}</td>
                     <td className="p-5">
-                      <span className={`px-3.5 py-1.5 rounded-full text-[12px] font-black tracking-tighter inline-flex items-center gap-1.5 ${
-                        log.pose_status === 'WARNING' ? 'bg-rose-50 text-rose-700 border border-rose-100' : 
-                        log.pose_status === 'CAUTION' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 
-                        'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${
-                          log.pose_status === 'WARNING' ? 'bg-rose-500' : 
-                          log.pose_status === 'CAUTION' ? 'bg-amber-500' : 
-                          'bg-emerald-500'
-                        }`}></span>
+                      <span className={`px-3.5 py-1.5 rounded-full text-[12px] font-black tracking-tighter inline-flex items-center gap-1.5 ${log.pose_status === 'WARNING' ? 'bg-rose-50 text-rose-700 border border-rose-100' :
+                        log.pose_status === 'CAUTION' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                          'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                        }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${log.pose_status === 'WARNING' ? 'bg-rose-500' :
+                          log.pose_status === 'CAUTION' ? 'bg-amber-500' :
+                            'bg-emerald-500'
+                          }`}></span>
                         {log.pose_status === 'WARNING' ? '위험' : log.pose_status === 'CAUTION' ? '주의' : '정상'}
                       </span>
                     </td>
