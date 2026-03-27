@@ -30,12 +30,10 @@ export default function Dashboard() {
   const [focusSeconds, setFocusSeconds] = useState(0);
   const [historyLog, setHistoryLog] = useState([]);
 
-  // 💡 텍스트 한글화: 초기 안내 메시지 변경
   const [serverFeedback, setServerFeedback] = useState("우측 상단의 '▶ 측정 시작' 버튼을 눌러주세요.");
   const [serverStatus, setServerStatus] = useState('--');
   const [displayScore, setDisplayScore] = useState('--');
 
-  // 🔴 기능 로직 (절대 수정 금지)
   useEffect(() => {
     socketRef.current = io('http://localhost:3000', { withCredentials: true });
 
@@ -89,7 +87,6 @@ export default function Dashboard() {
     return () => { if (socketRef.current) socketRef.current.disconnect(); };
   }, []);
 
-  // 🔴 기능 로직 (절대 수정 금지)
   useEffect(() => {
     let interval;
     if (isFocusing) interval = setInterval(() => setFocusSeconds(p => p + 1), 1000);
@@ -102,9 +99,7 @@ export default function Dashboard() {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // 🔴 기능 로직 (절대 수정 금지)
   const startCamera = async () => {
-    // 💡 텍스트 한글화: 로딩 안내 메시지
     setServerFeedback("AI 분석 엔진을 준비 중입니다. 잠시만 기다려주세요...");
 
     const loadScript = (src) => new Promise((res) => { const s = document.createElement('script'); s.src = src; s.onload = res; document.body.appendChild(s); });
@@ -143,7 +138,6 @@ export default function Dashboard() {
       if (!canvasRef.current) return;
 
       if (!res.poseLandmarks) {
-        // 💡 텍스트 한글화: 카메라 감지 오류 메시지
         setServerFeedback("⚠️ 사용자를 찾을 수 없습니다! 상체가 잘 보이도록 정면을 향해 앉아주세요.");
         setServerStatus('--');
         return;
@@ -162,7 +156,6 @@ export default function Dashboard() {
       if (now - lastSentTimeRef.current >= 1000) {
         lastSentTimeRef.current = now;
         
-        // 백엔드(무지님) 요청 반영: calibration, faceLandmarks 필드 추가 (26.03.27)
         if (socketRef.current) {
           socketRef.current.emit('stream_data', { 
             landmarks: res.poseLandmarks, 
@@ -192,7 +185,6 @@ export default function Dashboard() {
     }
   };
 
-  // 🔴 기능 로직 (절대 수정 금지)
   const stopCamera = () => {
     if (cameraRef.current) { cameraRef.current.stop(); cameraRef.current = null; }
     if (videoRef.current?.srcObject) { videoRef.current.srcObject.getTracks().forEach(t => t.stop()); videoRef.current.srcObject = null; }
@@ -205,7 +197,6 @@ export default function Dashboard() {
     setDisplayScore('--');
   };
 
-  // 🔴 기능 로직 (절대 수정 금지)
   const handleStartMeasurement = async () => {
     try {
       const res = await fetch('http://localhost:3000/api/immersion/start', {
@@ -234,7 +225,6 @@ export default function Dashboard() {
     }
   };
 
-  // 🔴 기능 로직 (절대 수정 금지)
   const handleStopMeasurement = async () => {
     setIsFocusing(false);
     stopCamera();
@@ -266,14 +256,13 @@ export default function Dashboard() {
     }
   };
 
-  // 💡 상태를 시각적인 한국어 텍스트로 변환하는 헬퍼 변수
   const displayStatusLabel = serverStatus === 'WARNING' ? '위험' : serverStatus === 'CAUTION' ? '주의' : serverStatus === 'NORMAL' ? '정상' : '--';
 
   return (
-    <div className="w-full min-h-[90vh] p-6 lg:p-10 animate-fade-in font-sans selection:bg-indigo-100">
+    // 💡 UI 동기화: 전역 배경(index.css)이 자연스럽게 깔리도록 최상단 컨테이너의 bg 클래스를 완전히 비웠습니다.
+    <div className="max-w-[1400px] mx-auto min-h-[90vh] p-6 lg:p-10 animate-fade-in font-sans selection:bg-indigo-100">
 
-      {/* 💡 헤더 영역 한글화 */}
-      <div className="flex justify-between items-center mb-10 pb-6 border-b border-slate-100">
+      <div className="flex justify-between items-center mb-10 pb-6 border-b border-slate-200/60">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tighter">실시간 몰입도 분석</h2>
           <p className="text-slate-500 mt-1 font-medium">AI가 사용자의 집중 상태와 주변 환경을 정밀하게 분석합니다.</p>
@@ -300,14 +289,13 @@ export default function Dashboard() {
       </div>
 
       <div className="flex flex-col gap-8">
-
-        {/* 💡 요약 카드 한글화 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
             { label: '진행 시간', value: formatTime(focusSeconds), unit: '', icon: '⏱️', color: 'text-indigo-600', bgColor: 'bg-indigo-50' },
             { label: '몰입 에너지', value: displayScore, unit: '%', icon: '⚡', color: 'text-emerald-500', bgColor: 'bg-emerald-50' },
             { label: '주변 소음', value: decibel, unit: 'dB', icon: '🎧', color: 'text-slate-500', bgColor: 'bg-slate-100' }
           ].map((item, idx) => (
+            // 내부에 있는 카드들은 하얗게 띄워서 가독성 확보
             <div key={idx} className="bg-white p-7 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-6 transition-all hover:shadow-md hover:-translate-y-1">
               <div className={`w-16 h-16 rounded-full ${item.bgColor} flex items-center justify-center text-3xl border border-white/50 shadow-inner ${item.color}`}>
                 {item.icon}
@@ -323,8 +311,6 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-
-          {/* 💡 카메라 영역 한글화 */}
           <div className="lg:col-span-8 flex flex-col h-full">
             <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex-grow">
               <div className="flex justify-between items-center mb-5 px-1">
@@ -352,7 +338,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 💡 상태 인사이트 영역 한글화 */}
           <div className="lg:col-span-4 flex flex-col gap-6 h-full">
             <div className="p-8 py-10 rounded-3xl bg-slate-950 text-white shadow-2xl shadow-slate-300 flex flex-col items-center text-center flex-grow">
               <h3 className="font-bold text-indigo-300 text-xs uppercase tracking-widest mb-12 border-b border-indigo-900/50 w-full pb-4">현재 몰입 상태</h3>
@@ -383,7 +368,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 💡 테이블 영역 한글화 */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden mt-2">
           <div className="p-6 px-8 border-b border-slate-100 flex justify-between items-center">
             <h3 className="font-bold text-slate-900 text-lg tracking-tight">실시간 데이터 기록</h3>

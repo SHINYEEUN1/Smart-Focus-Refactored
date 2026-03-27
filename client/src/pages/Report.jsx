@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Line } from 'react-chartjs-2';
-// 💡 기존 html2canvas 대신 더 강력하고 최신 CSS를 완벽 지원하는 html-to-image로 교체!
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import {
@@ -101,17 +100,15 @@ export default function Report() {
     fetchReportData();
   }, [imm_idx]);
 
-  // 🚀 [해결됨] html-to-image를 사용한 새롭고 안정적인 PDF 저장 함수
   const handleExportPDF = async () => {
     if (!reportRef.current) return;
     setIsExporting(true);
 
     setTimeout(async () => {
       try {
-        // html2canvas 대신 toPng 호출. 브라우저 네이티브 엔진을 써서 oklch 등 모든 CSS 완벽 지원
         const dataUrl = await toPng(reportRef.current, {
           backgroundColor: '#f8fafc',
-          pixelRatio: 2 // 고화질 옵션 유지
+          pixelRatio: 2 
         });
 
         const pdf = new jsPDF('p', 'mm', 'a4');
@@ -137,7 +134,8 @@ export default function Report() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center  gap-4">
+      // 💡 로딩 화면 컨테이너 배경색 비우기 (투명도 유지)
+      <div className="min-h-[85vh] flex flex-col items-center justify-center gap-4">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
         <p className="text-slate-500 font-bold tracking-widest animate-pulse">데이터를 분석하는 중입니다...</p>
       </div>
@@ -146,7 +144,8 @@ export default function Report() {
 
   if (!reportData) {
     return (
-      <div className="min-h-screen flex items-center justify-center  p-4 md:p-6">
+      // 💡 에러 화면 컨테이너 배경색 비우기 (투명도 유지)
+      <div className="min-h-[85vh] flex items-center justify-center p-4 md:p-6">
         <div className="max-w-md w-full bg-white p-8 md:p-12 rounded-3xl shadow-sm border border-slate-100 text-center">
           <div className="text-6xl mb-6 opacity-40">📊</div>
           <h2 className="text-2xl font-black text-slate-800 mb-2">분석 데이터를 찾을 수 없습니다</h2>
@@ -221,7 +220,8 @@ export default function Report() {
   };
 
   return (
-    <div className="min-h-screen  text-slate-800 p-4 sm:p-6 md:p-10 font-sans selection:bg-indigo-100" ref={reportRef}>
+    // 💡 메인 리포트 화면: max-w 설정으로 중앙 정렬 및 배경 완전 투명화
+    <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans selection:bg-indigo-100" ref={reportRef}>
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-10 pb-6 border-b border-slate-200/60 gap-4 md:gap-0">
         <div>
