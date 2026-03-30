@@ -57,79 +57,102 @@ app.use(express.static(path.join(__dirname, '../client/dist')));
 
 io.on('connection', (socket) => {
     console.log('클라이언트 연결됨:', socket.id);
+   
 
     // 💡 상태 관리를 위한 변수들
     let last_saved_status = null; 
-    const poseBuffer = []; // 1초간 자세를 담을 바구니
+    const poseBuffer = []; 
     let lastDispatchTime = Date.now();
+     let last_noise_save_time = 0; 
+    const NOISE_SAVE_INTERVAL = 5000;
+
 
     socket.emit('engine_ready', { status: 'READY', message: 'AI 분석 엔진 가동 시작' });
 
-    socket.on('stream_data', async (data) => {
-        // [변경] 인자 추가: calibration, faceLandmarks 추가 수신
-        const { landmarks, noise_db, imm_idx, calibration, faceLandmarks } = data;
-
-        // 1. 사용자 이탈 체크 (기존 로직 유지)
-        if (!check_user_presence(landmarks)) {
-            return socket.emit('analysis_result', { status: 'USER_NOT_FOUND', message: '사용자를 찾는 중입니다...' });
-        }
-
-        // 2. 엔진 분석 수행 (수정된 인자 적용)
-        const mode = detect_camera_mode(landmarks);
-        const noise_status = analyze_noise_level(noise_db);
-        const current_posture = analyze_posture(landmarks, mode, calibration, faceLandmarks);
-
-        // 3. 버퍼링 로직: 현재 프레임의 자세를 바구니에 추가
-        poseBuffer.push(current_posture);
-        const now = Date.now();
-
-        // 4. 1초(1000ms)가 지나면 최종 결과 도출 및 전송
-        if (now - lastDispatchTime >= 1000) {
-            const counts = {};
-            poseBuffer.forEach(p => counts[p] = (counts[p] || 0) + 1);
-            const total = poseBuffer.length;
-            
-            // 지분율 20% 이상인 자세 중 가장 빈번한 것 선택 (없으면 정자세)
-            const final_posture = Object.entries(counts).find(([, c]) => c / total >= 0.2)?.[0] || 'GOOD_POSTURE';
-
-            // 버퍼 및 타이머 리셋
-            poseBuffer.length = 0;
-            lastDispatchTime = now;
-
-            // 5. 점수 계산 및 메시지 생성
-            const coaching_msg = get_coaching_message(final_posture, noise_status);
-            let display_score = 100;
-            if (final_posture === 'TURTLE_NECK') display_score = 80;
-            else if (final_posture === 'SLUMPED') display_score = 40;
-            else if (final_posture === 'LEANING_ON_HAND') display_score = 60;
-            else if (final_posture === 'DROWSY') display_score = 30; // 졸음 점수 추가
-
-            // 6. [기존 유지 로직] 상태 변화시에만 DB 저장
-            if (final_posture !== last_saved_status && imm_idx) {
-                try {
-                    await db.query(
-                        "INSERT INTO poses (imm_idx, pose_status, detected_at) VALUES (?, ?, NOW())", 
-                        [imm_idx, final_posture]
-                    );
-                    console.log(`[DB Record] ${last_saved_status} -> ${final_posture}`);
-                    last_saved_status = final_posture; 
-                } catch (err) {
-                    console.error("자세 저장 실패:", err.message);
-                }
+    socket.on('stream_data', async (data) => {  
+        
+        try {
+            // 0. 데이터 구조 분해 할당
+            const { landmarks, noise_db, imm_idx, calibration, faceLandmarks } = data;
+            //console.log("수신 데이터 구조:", data);  
+            //console.log("실시간 수신 중인 imm_idx:", imm_idx);
+            // 1. 사용자 이탈 체크
+            if (!check_user_presence(landmarks)) {
+                return socket.emit('analysis_result', { status: 'USER_NOT_FOUND', message: '사용자를 찾는 중입니다...' });
             }
 
-            // 7. 클라이언트에 결과 전송
-            socket.emit('analysis_result', {
-                status: 'SUCCESS',
-                camera_mode: mode,
-                noise_status,
-                posture_status: final_posture,
-                current_score: display_score,
-                message: coaching_msg,
-                timestamp: new Date()
-            });
+            // 2. 엔진 분석 수행
+            const mode = detect_camera_mode(landmarks);
+            const noise_status = analyze_noise_level(noise_db);
+            const current_posture = analyze_posture(landmarks, mode, calibration, faceLandmarks);
+
+            // 3. 버퍼링 로직
+            poseBuffer.push(current_posture);
+            const now = Date.now();
+
+            // 4. 1초(1000ms)가 지나면 최종 결과 도출 및 전송
+            if (now - lastDispatchTime >= 1000) {
+                const counts = {};
+                poseBuffer.forEach(p => counts[p] = (counts[p] || 0) + 1);
+                const total = poseBuffer.length || 1;
+                
+                const final_posture = Object.entries(counts).find(([, c]) => c / total >= 0.2)?.[0] || 'GOOD_POSTURE';
+
+                // 버퍼 및 타이머 리셋
+                poseBuffer.length = 0;
+                lastDispatchTime = now;
+
+                // 5. 점수 계산 및 메시지 생성
+                const coaching_msg = get_coaching_message(final_posture, noise_status);
+                let display_score = 100;
+                if (final_posture === 'TURTLE_NECK') display_score = 80;
+                else if (final_posture === 'SLUMPED') display_score = 40;
+                else if (final_posture === 'LEANING_ON_HAND') display_score = 60;
+                else if (final_posture === 'DROWSY') display_score = 30;
+
+                // 6. 상태 변화시에만 DB 저장
+                if (final_posture !== last_saved_status && imm_idx) { 
+                    try {
+                        const p_type = (final_posture === 'GOOD_POSTURE' || final_posture === 'NORMAL') ? 'GOOD' : 'BAD';
+                        await db.query(
+                            "INSERT INTO poses (imm_idx, pose_type, pose_status, count, detected_at) VALUES (?, ?, ?, 1, NOW())", 
+                            [imm_idx, p_type, final_posture]
+                            );
+                        console.log(`[DB 저장 성공] 세션 ${imm_idx}: ${final_posture}`);
+                        last_saved_status = final_posture; 
+                    } catch (dbErr) {
+                        console.error("자세 저장 실패:", dbErr.message);
+                    }
+                }
+                if (imm_idx && noise_db !== undefined && (now - last_noise_save_time >= NOISE_SAVE_INTERVAL)) {
+                    try {
+                        await db.query(
+                        "INSERT INTO noises (imm_idx, decibel, obj_name, reliability, is_summary, detected_at) VALUES (?, ?, ?, ?, 0, NOW())",
+                         [imm_idx, noise_db, 'ambient', 1]
+                        );
+                        console.log(`[소음 저장 성공] ${noise_db}dB`);
+                        last_noise_save_time = now; 
+                        } catch (noiseErr) {
+                        console.error("소음 저장 실패:", noiseErr.message);
+                        }
+                }
+
+                // 7. 클라이언트에 결과 전송
+                socket.emit('analysis_result', {
+                    status: 'SUCCESS',
+                    camera_mode: mode,
+                    noise_status,
+                    posture_status: final_posture,
+                    current_score: display_score,
+                    message: coaching_msg,
+                    timestamp: new Date()
+                });
+            }
+        } catch (err) {
+            // 전체 로직에 대한 에러 핸들링 (닫는 괄호 추가됨)
+            console.error("스트림 데이터 처리 중 치명적 에러:", err);
         }
-    });
+    }); 
 });
 
 // 6. 라우터 연결
