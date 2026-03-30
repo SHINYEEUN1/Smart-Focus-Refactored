@@ -125,40 +125,67 @@ router.get('/report/:imm_idx', async (req, res) => {
 
         // 4. 차트 데이터
        const [chartData] = await db.query(`
-            SELECT 
-                time_label, 
-                IFNULL(MAX(imm_score), 0) as imm_score, 
-                MAX(decibel) as decibel
-            FROM (
-        
-            SELECT 
-                DATE_FORMAT(detected_at, '%H:%i:%s') as time_label,
-                CASE WHEN pose_type = 'GOOD' THEN 100 ELSE 40 END as imm_score,
-                NULL as decibel,
-                detected_at
-            FROM poses WHERE imm_idx = ?
+    SELECT 
+        time_label, 
+        MAX(imm_score) as imm_score, 
+        MAX(decibel) as decibel
+    FROM (
+        SELECT 
+            DATE_FORMAT(detected_at, '%H:%i:%s') as time_label,
+            CASE 
+                WHEN pose_type = 'GOOD' THEN 100 
+                WHEN pose_type = 'BAD' THEN 40 
+                ELSE NULL 
+            END as imm_score,
+            NULL as decibel,
+            detected_at
+        FROM poses WHERE imm_idx = ?
 
-            UNION ALL
+        UNION ALL
 
-            SELECT 
-                DATE_FORMAT(detected_at, '%H:%i:%s') as time_label,
-                NULL as imm_score,
-                decibel,
-                detected_at
-            FROM noises WHERE imm_idx = ?
-            ) AS combined_data
-            GROUP BY time_label
-            ORDER BY MIN(detected_at) ASC`, [imm_idx, imm_idx]);
+        SELECT 
+            DATE_FORMAT(detected_at, '%H:%i:%s') as time_label,
+            NULL as imm_score,
+            decibel,
+            detected_at
+        FROM noises WHERE imm_idx = ?
+    ) AS combined_data
+    GROUP BY time_label
+    /* [수정] HAVING 절은 삭제했습니다. 소음 데이터가 누락되지 않게 하기 위해서입니다. */
+    ORDER BY MIN(detected_at) ASC
+`, [imm_idx, imm_idx]);
 
-        // [핵심 수정] 위에서 정의한 변수명으로 매칭해서 응답 전송
+// 💡 [핵심 추가] 직전 값으로 빈틈을 메우는 로직 (Forward Fill)
+let last_score = 100;   // 초기 점수 기본값
+let last_decibel = 30; // 초기 소음 기본값 (조용한 상태)
+
+const filledChartData = chartData.map(item => {
+    // 점수가 NULL이면 이전 점수를 그대로 쓰고, 데이터가 있으면 갱신
+    if (item.imm_score !== null) {
+        last_score = item.imm_score;
+    } else {
+        item.imm_score = last_score;
+    }
+
+    // 소음 데이터가 NULL이면 이전 소음을 그대로 쓰고, 데이터가 있으면 갱신
+    if (item.decibel !== null) {
+        last_decibel = item.decibel;
+    } else {
+        item.decibel = last_decibel;
+    }
+
+    return item;
+});
+
+// [응답 전송] filledChartData를 보냅니다.
         res.json({ 
             success: true, 
             data: { 
-                session: sessionInfo[0], 
-                noise_summary: noiseSummary[0], 
-                pose_summary: poseSummary,
-                chart_data: chartData 
-            } 
+            session: sessionInfo[0], 
+            noise_summary: noiseSummary[0], 
+            pose_summary: poseSummary,
+            chart_data: filledChartData // 👈 가공된 데이터를 전송!
+    } 
         });
 
     } catch (err) {

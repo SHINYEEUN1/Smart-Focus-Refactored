@@ -14,7 +14,6 @@ const isAuthenticated = (req, res, next) => {
 router.get('/stats/:user_idx', isAuthenticated, async (req, res) => {
     const { user_idx } = req.params;
 
-    // 본인 데이터인지 검증 (선택 사항이지만 권장)
     if (parseInt(user_idx) !== req.session.user.user_idx) {
         return res.status(403).json({ success: false, message: "권한이 없습니다." });
     }
@@ -25,16 +24,24 @@ router.get('/stats/:user_idx', isAuthenticated, async (req, res) => {
                 (SELECT COUNT(*) FROM immersions WHERE user_idx = ?) as total_sessions,
                 (SELECT IFNULL(SUM(reward_point), 0) FROM points WHERE user_idx = ?) as total_points,
                 (SELECT COUNT(*) FROM user_badges WHERE user_idx = ?) as badge_count,
-                /* NULL 방지를 위해 IFNULL 위치 조정 */
                 IFNULL(SUM(TIMESTAMPDIFF(SECOND, start_time, end_time)), 0) as total_seconds,
-                IFNULL(AVG(imm_score), 0) as avg_score
+                
+                /* [수정 포인트] 상세 포즈 기록(poses)에서 전체 평균 점수를 계산 */
+                (
+                    SELECT IFNULL(AVG(CASE WHEN pose_type = 'GOOD' THEN 100 ELSE 40 END), 0)
+                    FROM poses p
+                    JOIN immersions i_sub ON p.imm_idx = i_sub.imm_idx
+                    WHERE i_sub.user_idx = ?
+                ) as avg_score
             FROM immersions 
             WHERE user_idx = ? AND end_time IS NOT NULL
         `;
         
-        const [stats] = await db.query(sql, [user_idx, user_idx, user_idx, user_idx]);
+        // user_idx가 5번 들어갑니다.
+        const [stats] = await db.query(sql, [user_idx, user_idx, user_idx, user_idx, user_idx]);
         
-        const total = stats[0].total_seconds;
+        const row = stats[0];
+        const total = row.total_seconds;
         const hours = Math.floor(total / 3600);
         const minutes = Math.floor((total % 3600) / 60);
         const seconds = total % 60;
@@ -42,8 +49,9 @@ router.get('/stats/:user_idx', isAuthenticated, async (req, res) => {
         res.json({ 
             success: true, 
             data: {
-                ...stats[0],
-                avg_score: parseFloat(stats[0].avg_score).toFixed(1), // 소수점 한자리 고정
+                ...row,
+                // 숫자로 확실히 변환 후 소수점 처리
+                avg_score: Number(row.avg_score).toFixed(1), 
                 formatted_time: hours > 0 
                     ? `${hours}시간 ${minutes}분 ${seconds}초` 
                     : `${minutes}분 ${seconds}초`
@@ -60,11 +68,13 @@ router.get('/stats/:user_idx', isAuthenticated, async (req, res) => {
  */
 router.get('/history/:user_idx', isAuthenticated, async (req, res) => {
     const { user_idx } = req.params;
-
     try {
         const sql = `
             SELECT 
-                i.imm_idx, i.imm_date, i.start_time, i.end_time, i.imm_score,
+                i.imm_idx, i.imm_date, i.start_time, i.end_time,
+                /* i.imm_score 대신 여기서 직접 평균 계산 */
+                (SELECT IFNULL(AVG(CASE WHEN p.pose_type = 'GOOD' THEN 100 ELSE 40 END), 0) 
+                 FROM poses p WHERE p.imm_idx = i.imm_idx) as imm_score,
                 (SELECT COUNT(*) FROM poses p WHERE p.imm_idx = i.imm_idx) as pose_count
             FROM immersions i
             WHERE i.user_idx = ? AND i.end_time IS NOT NULL
@@ -72,7 +82,14 @@ router.get('/history/:user_idx', isAuthenticated, async (req, res) => {
             LIMIT 20
         `;
         const [history] = await db.query(sql, [user_idx]);
-        res.json({ success: true, data: history });
+        
+        // 소수점 처리
+        const formattedHistory = history.map(item => ({
+            ...item,
+            imm_score: Number(item.imm_score).toFixed(1)
+        }));
+
+        res.json({ success: true, data: formattedHistory });
     } catch (err) {
         res.status(500).json({ success: false });
     }
