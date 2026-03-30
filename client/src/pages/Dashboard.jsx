@@ -37,7 +37,6 @@ export default function Dashboard() {
   const [serverStatus, setServerStatus] = useState('--');
   const [displayScore, setDisplayScore] = useState('--');
 
-  // 소켓 연결 및 결과 수신
   useEffect(() => {
     socketRef.current = io('http://localhost:3000', { withCredentials: true });
 
@@ -76,7 +75,6 @@ export default function Dashboard() {
     return () => { if (socketRef.current) socketRef.current.disconnect(); };
   }, []);
 
-  // 타이머 로직
   useEffect(() => {
     let interval;
     if (isFocusing) interval = setInterval(() => setFocusSeconds(p => p + 1), 1000);
@@ -147,7 +145,6 @@ export default function Dashboard() {
         lastSentTimeRef.current = now;
         
         if (socketRef.current) {
-          // 서버 사이드 분석 엔진에 현재 세션 ID(imm_idx)를 함께 전달하여 누락 방지
           socketRef.current.emit('stream_data', { 
             imm_idx: currentImmIdxRef.current, 
             landmarks: res.poseLandmarks, 
@@ -189,12 +186,16 @@ export default function Dashboard() {
     setDisplayScore('--');
   };
 
-  // 집중 측정 시작 시 유저 ID 동기화
   const handleStartMeasurement = async () => {
     try {
       const userInfoStr = localStorage.getItem('user_info');
-      const userInfo = userInfoStr ? JSON.parse(userInfoStr) : null;
-      const actualUserIdx = userInfo ? userInfo.user_idx : 1;
+      // 💡 유저 정보가 없으면 임의로 1번으로 보내던 더미 로직 삭제 -> 강제 튕김 처리
+      if (!userInfoStr) {
+        alert("로그인 정보가 없습니다. 다시 로그인 해주세요.");
+        navigate('/login');
+        return;
+      }
+      const actualUserIdx = JSON.parse(userInfoStr).user_idx;
 
       const res = await fetch('http://localhost:3000/api/immersion/start', {
         method: 'POST',
@@ -222,7 +223,6 @@ export default function Dashboard() {
     }
   };
 
-  // 측정 종료 시 포인트 지급을 위한 필수 파라미터 전송
   const handleStopMeasurement = async () => {
     setIsFocusing(false);
     stopCamera();
@@ -233,8 +233,12 @@ export default function Dashboard() {
       const finalScore = displayScore === '--' ? 0 : parseInt(displayScore, 10);
 
       const userInfoStr = localStorage.getItem('user_info');
-      const userInfo = userInfoStr ? JSON.parse(userInfoStr) : null;
-      const actualUserIdx = userInfo ? userInfo.user_idx : 1;
+      if (!userInfoStr) {
+        alert("세션이 만료되었습니다.");
+        navigate('/login');
+        return;
+      }
+      const actualUserIdx = JSON.parse(userInfoStr).user_idx;
 
       const res = await fetch('http://localhost:3000/api/immersion/end', {
         method: 'POST',
@@ -242,7 +246,7 @@ export default function Dashboard() {
         body: JSON.stringify({
           imm_idx: currentImmIdxRef.current,
           imm_score: finalScore,
-          user_idx: actualUserIdx // 포인트 보상 로직을 위한 유저 식별값 추가
+          user_idx: actualUserIdx 
         }),
         credentials: 'include'
       });

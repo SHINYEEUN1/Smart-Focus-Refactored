@@ -21,12 +21,17 @@ export default function Report() {
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
-    const fetchReportData = async () => {
-      const targetIdx = imm_idx || 1;
+    // 💡 URL에 imm_idx가 없으면 임의로 1번을 조회하던 더미 방어막 제거 -> 대시보드로 리디렉션
+    if (!imm_idx) {
+      alert("잘못된 접근입니다. 세션 번호가 없습니다.");
+      navigate('/dashboard');
+      return;
+    }
 
+    const fetchReportData = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch(`http://localhost:3000/api/immersion/report/${targetIdx}`, {
+        const response = await fetch(`http://localhost:3000/api/immersion/report/${imm_idx}`, {
           method: 'GET',
           credentials: 'include'
         });
@@ -50,10 +55,8 @@ export default function Report() {
             noise: item.decibel || 0
           })) || [];
 
-          // 백엔드 데이터가 1개뿐이면 선을 그리기 위해 시각적으로만 똑같은 점을 하나 더 복제해줍니다.
-          if (rawChartData.length === 1) {
-            rawChartData.push({ ...rawChartData[0], label: '종료 시점' });
-          }
+          // 💡 차트 점 복제 로직(rawChartData.push) 완전히 제거
+          // 백엔드가 준 원본 데이터 갯수 그대로 화면에 뿌려줌
 
           const MAX_POINTS = 60;
           let processedData = rawChartData;
@@ -99,7 +102,7 @@ export default function Report() {
     };
 
     fetchReportData();
-  }, [imm_idx]);
+  }, [imm_idx, navigate]);
 
   const handleExportPDF = async () => {
     if (!reportRef.current) return;
@@ -142,7 +145,6 @@ export default function Report() {
     );
   }
 
-  // 옹졸했던 에러 화면 다시 프리미엄 레이아웃으로 복구!
   if (!reportData) {
     return (
       <div className="max-w-[1400px] mx-auto min-h-[85vh] flex items-center justify-center p-4">
