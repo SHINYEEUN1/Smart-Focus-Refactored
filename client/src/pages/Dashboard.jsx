@@ -7,6 +7,7 @@ import { io } from 'socket.io-client';
 export default function Dashboard() {
   const navigate = useNavigate();
 
+  // 비전 분석용 Ref
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const cameraRef = useRef(null);
@@ -14,6 +15,7 @@ export default function Dashboard() {
   const poseRef = useRef(null);
   const faceMeshRef = useRef(null);
 
+  // 실시간 통신 및 데이터 Ref
   const socketRef = useRef(null);
   const faceLandmarksRef = useRef(null);
   const decibelRef = useRef(0);
@@ -21,6 +23,7 @@ export default function Dashboard() {
   const needsCalibrationRef = useRef(false);
   const lastSentTimeRef = useRef(0);
 
+  // 세션 식별용 상태
   const [currentImmIdx, setCurrentImmIdx] = useState(null);
   const currentImmIdxRef = useRef(null);
 
@@ -34,6 +37,7 @@ export default function Dashboard() {
   const [serverStatus, setServerStatus] = useState('--');
   const [displayScore, setDisplayScore] = useState('--');
 
+  // 소켓 연결 및 결과 수신
   useEffect(() => {
     socketRef.current = io('http://localhost:3000', { withCredentials: true });
 
@@ -53,7 +57,6 @@ export default function Dashboard() {
         setServerFeedback(data.message);
         setServerStatus(currentStatus);
 
-        // 백엔드에서 보내준 점수 화면에 적용
         const finalScore = data.current_score || 0; 
         setDisplayScore(finalScore);
 
@@ -73,6 +76,7 @@ export default function Dashboard() {
     return () => { if (socketRef.current) socketRef.current.disconnect(); };
   }, []);
 
+  // 타이머 로직
   useEffect(() => {
     let interval;
     if (isFocusing) interval = setInterval(() => setFocusSeconds(p => p + 1), 1000);
@@ -143,7 +147,7 @@ export default function Dashboard() {
         lastSentTimeRef.current = now;
         
         if (socketRef.current) {
-          // 백엔드가 DB에 제대로 저장할 수 있도록 imm_idx 필수 전송!
+          // 서버 사이드 분석 엔진에 현재 세션 ID(imm_idx)를 함께 전달하여 누락 방지
           socketRef.current.emit('stream_data', { 
             imm_idx: currentImmIdxRef.current, 
             landmarks: res.poseLandmarks, 
@@ -185,6 +189,7 @@ export default function Dashboard() {
     setDisplayScore('--');
   };
 
+  // 집중 측정 시작 시 유저 ID 동기화
   const handleStartMeasurement = async () => {
     try {
       const userInfoStr = localStorage.getItem('user_info');
@@ -201,7 +206,7 @@ export default function Dashboard() {
 
       if (data.success) {
         setCurrentImmIdx(data.imm_idx);
-        currentImmIdxRef.current = data.imm_idx;
+        currentImmIdxRef.current = data.imm_idx; 
 
         setIsFocusing(true);
         setFocusSeconds(0);
@@ -217,6 +222,7 @@ export default function Dashboard() {
     }
   };
 
+  // 측정 종료 시 포인트 지급을 위한 필수 파라미터 전송
   const handleStopMeasurement = async () => {
     setIsFocusing(false);
     stopCamera();
@@ -226,12 +232,17 @@ export default function Dashboard() {
     try {
       const finalScore = displayScore === '--' ? 0 : parseInt(displayScore, 10);
 
+      const userInfoStr = localStorage.getItem('user_info');
+      const userInfo = userInfoStr ? JSON.parse(userInfoStr) : null;
+      const actualUserIdx = userInfo ? userInfo.user_idx : 1;
+
       const res = await fetch('http://localhost:3000/api/immersion/end', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imm_idx: currentImmIdxRef.current,
-          imm_score: finalScore
+          imm_score: finalScore,
+          user_idx: actualUserIdx // 포인트 보상 로직을 위한 유저 식별값 추가
         }),
         credentials: 'include'
       });
