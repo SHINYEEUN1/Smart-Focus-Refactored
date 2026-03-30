@@ -25,7 +25,8 @@ const {
     analyze_noise_level, 
     check_user_presence, 
     analyze_posture, 
-    get_coaching_message 
+    get_coaching_message,
+    reset_static_tracking 
 } = require('./utils/analysis_engine');
 
 // 3. 포트 및 미들웨어 설정
@@ -105,10 +106,20 @@ io.on('connection', (socket) => {
                 // 5. 점수 계산 및 메시지 생성
                 const coaching_msg = get_coaching_message(final_posture, noise_status);
                 let display_score = 100;
-                if (final_posture === 'TURTLE_NECK') display_score = 80;
-                else if (final_posture === 'SLUMPED') display_score = 40;
-                else if (final_posture === 'LEANING_ON_HAND') display_score = 60;
-                else if (final_posture === 'DROWSY') display_score = 30;
+
+                if (final_posture.includes('TURTLE_NECK')) {
+                display_score = 80;
+                    } else if (final_posture.includes('SLUMPED')) {
+                        display_score = 40;
+                    } else if (final_posture.includes('LEANING_ON_HAND')) {
+                        display_score = 60;
+                    } else if (final_posture.includes('TILTED')) { // 기울어짐 추가
+                        display_score = 70;
+                    } else if (final_posture.includes('STATIC')) { // 부동 자세 추가
+                        display_score = 50;
+                    } else if (final_posture === 'DROWSY') {
+                        display_score = 30;
+                }
 
                 // 6. 상태 변화시에만 DB 저장
                 if (final_posture !== last_saved_status && imm_idx) { 
@@ -143,13 +154,12 @@ io.on('connection', (socket) => {
                     camera_mode: mode,
                     noise_status,
                     posture_status: final_posture,
-                    current_score: display_score,
+                    current_score: display_score, // 이제 80, 40 등으로 잘 변합니다!
                     message: coaching_msg,
                     timestamp: new Date()
                 });
             }
         } catch (err) {
-            // 전체 로직에 대한 에러 핸들링 (닫는 괄호 추가됨)
             console.error("스트림 데이터 처리 중 치명적 에러:", err);
         }
     }); 
