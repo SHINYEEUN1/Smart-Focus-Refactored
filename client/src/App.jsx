@@ -28,7 +28,6 @@ export default function App() {
         
         if (data.success) {
           setIsLoggedIn(true);
-          // 💡 [핵심 수정] 강제로 대시보드로 보내는 navigate('/dashboard') 로직 삭제
         } else {
           setIsLoggedIn(false);
         }
@@ -39,7 +38,7 @@ export default function App() {
       }
     };
     checkSession();
-  }, []); // 💡 [핵심 수정] location.pathname 감시를 없애서, 앱 켤 때 딱 한 번만 세션을 체크하도록 변경
+  }, []); 
 
   const handleLogout = async () => {
     try {
@@ -51,6 +50,7 @@ export default function App() {
       
       if (data.success) {
         alert("성공적으로 로그아웃 되었습니다.");
+        localStorage.removeItem('user_info'); // 다른 아이디 로그인 시 닉네임 꼬임 방지
         setIsLoggedIn(false);
         navigate('/'); 
       }
@@ -61,7 +61,7 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#Eef2f6] flex items-center justify-center font-bold text-slate-500">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-500">
         사용자 정보를 확인 중입니다...
       </div>
     );
@@ -73,42 +73,29 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#Eef2f6] font-sans selection:bg-indigo-100">
-      <header className="bg-[#24223E] px-8 py-5 flex justify-between items-center shadow-xl sticky top-0 z-50 border-b border-white/5">
-        <div className="flex-1 cursor-pointer" onClick={() => navigate('/')}>
+    <div className="min-h-screen bg-slate-50 font-sans selection:bg-indigo-100">
+      
+      {/* 👇 원래 디자인으로 완벽하게 복구된 헤더 부분 */}
+      <header className="px-8 py-5 flex justify-between items-center bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
+        <div onClick={() => navigate('/')} className="cursor-pointer hover:opacity-80 transition-opacity">
           <Logo />
         </div>
-        
-        {isLoggedIn && (
-          <nav className="hidden md:flex space-x-2 bg-white/5 p-1.5 rounded-2xl border border-white/10">
-            {[
-              { id: 'dashboard', l: '대시보드', path: '/dashboard' },
-              { id: 'report', l: '분석 리포트', path: '/report' },
-              { id: 'mypage', l: '마이페이지', path: '/mypage' }
-            ].map((nav) => (
-              <button 
-                key={nav.id} 
-                onClick={() => navigate(nav.path)} 
-                className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${
-                  location.pathname.startsWith(nav.path) ? 'bg-[#5B44F2] text-white shadow-xl' : 'text-slate-400 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                {nav.l}
-              </button>
-            ))}
-          </nav>
-        )}
-
-        <div className="flex-1 flex gap-4 items-center justify-end">
+        <div className="flex items-center gap-4">
           {!isLoggedIn ? (
-            <div className="flex gap-4">
-              <button onClick={() => navigate('/login')} className="text-sm font-black text-indigo-200 hover:text-white transition-colors">로그인</button>
+            <div className="flex gap-2">
+              <button onClick={() => navigate('/login')} className="px-5 py-2.5 rounded-xl text-sm font-black text-indigo-200 hover:text-white transition-colors">로그인</button>
               <button onClick={() => navigate('/signup')} className="px-5 py-2.5 bg-[#5B44F2] text-white rounded-xl text-sm font-black shadow-lg hover:bg-[#4a36c4] transition-colors">회원가입</button>
             </div>
           ) : (
-            <button onClick={handleLogout} className="p-2.5 bg-white/5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-white/10 transition-all" title="로그아웃">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-            </button>
+            <div className="flex items-center gap-4">
+              <button onClick={() => navigate('/dashboard')} className="text-slate-300 hover:text-white font-bold text-sm transition-colors">대시보드</button>
+              <button onClick={() => navigate('/report')} className="text-slate-300 hover:text-white font-bold text-sm transition-colors">분석 리포트</button>
+              <button onClick={() => navigate('/mypage')} className="text-slate-300 hover:text-white font-bold text-sm transition-colors">마이페이지</button>
+
+              <button onClick={handleLogout} className="p-2.5 bg-white/5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-white/10 transition-all ml-2" title="로그아웃">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+              </button>
+            </div>
           )}
         </div>
       </header>
