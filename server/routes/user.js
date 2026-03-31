@@ -2,6 +2,66 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
 const bcrypt = require('bcrypt');
+const nodemailer = require('nodemailer');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+
+
+// --- [추가] Passport 유저 직렬화 (세션에 저장하는 규칙) ---
+passport.serializeUser((user, done) => {
+    done(null, user);
+});
+passport.deserializeUser((user, done) => {
+    done(null, user);
+});
+
+// --- [추가] 구글 로그인 전략 설정 ---
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_ID,      // .env에 저장할 클라이언트 ID
+    clientSecret: process.env.GOOGLE_SECRET,  // .env에 저장할 시크릿 키
+    callbackURL: "/auth/google/callback" // 백엔드 콜백 주소
+  },
+  async (accessToken, refreshToken, profile, done) => {
+    try {
+        const email = profile.emails[0].value;
+        const snsId = profile.id;
+        const nick = profile.displayName;
+
+        // 1. DB에 해당 소셜 유저가 있는지 확인
+        const [users] = await pool.query("SELECT * FROM users WHERE email = ? AND provider = 'google'", [email]);
+
+        if (users.length > 0) {
+            // 이미 가입된 유저라면 그대로 로그인
+            return done(null, users[0]);
+        } else {
+            // 신규 유저라면 DB에 저장 (비밀번호는 NULL)
+            const sql = "INSERT INTO users (email, nick, provider, sns_id) VALUES (?, ?, 'google', ?)";
+            const [result] = await pool.query(sql, [email, nick, snsId]);
+            
+            const newUser = { id: result.insertId, email, nick, provider: 'google' };
+            return done(null, newUser);
+        }
+    } catch (err) {
+        return done(err);
+    }
+  }
+));
+
+
+// 1. [추가] 인증번호 임시 저장소 (메모리)
+// 서버가 꺼지면 초기화됩니다. 실제 서비스에선 Redis 등을 쓰지만 팀 프로젝트에선 이 방식이 가장 빠릅니다.
+const tempAuthCodes = {};
+
+// 2. [추가] 메일 발송 설정 (Nodemailer)
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.MAIL_USER, // .env 파일의 ID
+        pass: process.env.MAIL_PASS  // .env 파일의 앱 비밀번호
+    }
+});
+
+
 
 // [검문소] 로그인 여부를 체크하는 미들웨어 (여기에 추가!)
 const isAuthenticated = (req, res, next) => {
@@ -16,9 +76,61 @@ const isAuthenticated = (req, res, next) => {
     }
 };
 
+// [POST] /send-email - 인증번호 발송
+router.post('/send-email', async (req, res) => {
+    const { email } = req.body;
+    
+    // 6자리 랜덤 숫자 생성
+    const authCode = Math.floor(100000 + Math.random() * 900000);
+
+    try {
+        await transporter.sendMail({
+            from: `"포스처가드" <${process.env.MAIL_USER}>`,
+            to: email,
+            subject: "[포스처가드] 회원가입 인증번호입니다.",
+            text: `인증번호는 [${authCode}] 입니다. 3분 이내에 입력해주세요.`
+        });
+
+        // 메모리에 저장 (3분 후 만료)
+        tempAuthCodes[email] = {
+            code: authCode,
+            isVerified: false,
+            expiry: Date.now() + 3 * 60 * 1000 
+        };
+
+        res.json({ success: true, message: "인증번호가 발송되었습니다." });
+    } catch (err) {
+        console.error("메일 발송 에러:", err);
+        res.status(500).json({ success: false, message: "메일 발송에 실패했습니다." });
+    }
+});
+
+// --- [신규 추가] 이메일 인증 관련 라우터 시작 ---
+// [POST] /user/verify-code - 인증번호 확인
+router.post('/verify-code', (req, res) => {
+    const { email, code } = req.body;
+    const authInfo = tempAuthCodes[email];
+
+    if (authInfo && authInfo.code == code && authInfo.expiry > Date.now()) {
+        authInfo.isVerified = true; // ✅ 인증 성공 상태로 변경
+        res.json({ success: true, message: "이메일 인증이 완료되었습니다." });
+    } else {
+        res.status(400).json({ success: false, message: "번호가 틀렸거나 만료되었습니다." });
+    }
+});
+
 // [POST] /join - 회원가입
 router.post('/join', async (req, res, next) => {
     const { email, pwd, nick } = req.body;
+
+    // 💡 [수정] 이메일 인증 여부 확인 검문소
+    const authInfo = tempAuthCodes[email];
+    if (!authInfo || !authInfo.isVerified) {
+        return res.status(400).json({ 
+            success: false, 
+            message: "이메일 인증을 먼저 완료해주세요." 
+        });
+    }
 
     try {
         // 1. 중복 체크
@@ -30,7 +142,6 @@ router.post('/join', async (req, res, next) => {
                 code: "DUPLICATE_EMAIL"
             });
         }
-
         // 2. 암호화
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(pwd, saltRounds);
@@ -38,6 +149,8 @@ router.post('/join', async (req, res, next) => {
         // 3. DB 저장 (created_at은 DB 설정에 따라 생략 가능하지만 명시해두면 안전합니다)
         const sql = "INSERT INTO users (email, pwd, nick, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)";
         await pool.query(sql, [email, hashedPassword, nick]);
+
+        delete tempAuthCodes[email];
 
         res.status(201).json({ success: true, message: "회원가입 완료!" });
 
@@ -48,6 +161,61 @@ router.post('/join', async (req, res, next) => {
         }
         next(err);
     }
+});
+
+//[추가] 닉네임 중복 체크 (프론트 요청사항)
+// 사용자가 닉네임을 입력하고 '중복 확인' 버튼을 누를 때 호출됩니다.
+router.post('/check-nick', async (req, res) => {
+    const { nick } = req.body;
+
+    if (!nick || nick.trim() === "") {
+        return res.status(400).json({ success: false, message: "닉네임을 입력해주세요." });
+    }
+
+    try {
+        const [rows] = await pool.query("SELECT * FROM users WHERE nick = ?", [nick]);
+        
+        if (rows.length > 0) {
+            // 중복된 닉네임이 있는 경우
+            return res.json({ 
+                success: false, 
+                message: "이미 사용 중인 닉네임입니다.",
+                code: "DUPLICATE_NICK" 
+            });
+        }
+
+        // 중복이 없는 경우
+        res.json({ 
+            success: true, 
+            message: "사용 가능한 닉네임입니다." 
+        });
+    } catch (err) {
+        console.error("닉네임 체크 에러:", err);
+        res.status(500).json({ success: false, message: "서버 오류가 발생했습니다." });
+    }
+});
+
+
+// --- [신규 추가] 소셜 로그인 실행 라우터 ---
+// 1. 프론트엔드에서 구글 로그인 버튼을 눌렀을 때 가는 곳
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+// 2. 구글 인증이 끝나고 우리 서버로 돌아오는 통로 (프론트 요청 반영)
+router.get('/google/callback', 
+  passport.authenticate('google', { failureRedirect: '/login' }), 
+  (req, res) => {
+    // 일반 로그인과 형식을 맞추기 위해 세션에 저장
+    req.session.user = req.user; 
+    
+    // 프론트엔드 담당자가 요청한 주소로 리다이렉트
+    res.redirect('http://localhost:5173/dashboard');
+  }
+);
+
+router.get('/kakao', passport.authenticate('kakao'));
+router.get('/kakao/callback', passport.authenticate('kakao', { failureRedirect: '/login' }), (req, res) => {
+    req.session.user = req.user;
+    res.redirect('http://localhost:5173/dashboard');
 });
 
 // [POST] /login - 로그인
