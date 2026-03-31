@@ -20,23 +20,31 @@ export default function App() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const res = await fetch('http://localhost:3000/user/check', {
+        // 소셜 로그인 리다이렉트 후 서버 세션 확인 (쿠키 전송 필수)
+        const res = await fetch('http://localhost:3000/auth/check', {
           method: 'GET',
           credentials: 'include' 
         });
         const data = await res.json();
         
-        if (data.success) {
+        if (data.success && data.user_info) {
+          // 서버 세션 정보를 로컬 스토리지에 동기화
+          localStorage.setItem('user_info', JSON.stringify(data.user_info));
           setIsLoggedIn(true);
         } else {
+          // 세션 만료 또는 비회원 시 기존 데이터 정리
+          localStorage.removeItem('user_info');
           setIsLoggedIn(false);
         }
       } catch (err) {
-        console.error("세션 확인 에러:", err);
+        console.error("세션 동기화 에러:", err);
+        localStorage.removeItem('user_info');
+        setIsLoggedIn(false);
       } finally {
         setIsLoading(false);
       }
     };
+    
     checkSession();
   }, []); 
 
@@ -75,7 +83,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-indigo-100">
       
-      {/* 👇 원래 디자인으로 완벽하게 복구된 헤더 부분 */}
       <header className="px-8 py-5 flex justify-between items-center bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
         <div onClick={() => navigate('/')} className="cursor-pointer hover:opacity-80 transition-opacity">
           <Logo />
