@@ -7,7 +7,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const db = require('./config/database');
 require('dotenv').config(); // [중요] .env 파일 로드 추가
-
+const passport = require('passport');
 
 // 2. 서버 및 소켓 설정
 const app = express();
@@ -42,18 +42,21 @@ app.use(express.urlencoded({ extended: true }));
 
 // 4. 세션 설정 (환경변수 체크 필수!)
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'your_fallback_secret', // .env 확인
+    secret: process.env.SESSION_SECRET, // .env 확인
     resave: false,
     saveUninitialized: false,
     rolling: true,
     cookie: { 
+        httpOnly: true,
         maxAge: 1000 * 60 * 60, // 1시간
         secure: false // HTTPS 사용 시 true로 변경
     }
 }));
 
-// 5. 정적 파일 접근 (리액트 빌드 폴더)
-app.use(express.static(path.join(__dirname, '../client/dist')));
+// [위치 변경] Passport 초기화는 라우터보다 먼저!
+app.use(passport.initialize());
+app.use(passport.session());
+
 
 
 io.on('connection', (socket) => {
@@ -77,6 +80,10 @@ io.on('connection', (socket) => {
             const { landmarks, noise_db, imm_idx, calibration, faceLandmarks } = data;
             //console.log("수신 데이터 구조:", data);  
             //console.log("실시간 수신 중인 imm_idx:", imm_idx);
+            if (!imm_idx) {
+            // console.warn("세션 ID가 없어 분석을 중단합니다.");
+            return;
+        }
             // 1. 사용자 이탈 체크
             if (!check_user_presence(landmarks)) {
                 return socket.emit('analysis_result', { status: 'USER_NOT_FOUND', message: '사용자를 찾는 중입니다...' });
@@ -172,9 +179,14 @@ const immersionRouter = require('./routes/immersion');
 const mypageRouter = require('./routes/mypage');
 
 app.use('/', mainRouter);
+app.use('/auth', userRouter);
 app.use('/user', userRouter);
 app.use('/api/immersion', immersionRouter);
 app.use('/api/mypage', mypageRouter);
+
+
+// 정적 파일 접근 (리액트 빌드 폴더)
+app.use(express.static(path.join(__dirname, '../client/dist')));
 
 // 7. 에러 처리 미들웨어 (404 & 500)
 app.use((req, res) => {
