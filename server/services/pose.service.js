@@ -1,17 +1,25 @@
-// services/pose.service.js
 const db = require('../config/database');
 const { getPoseType } = require('../utils/mappers');
+
 
 async function savePoseIfChanged({
   immersionId,
   finalPosture,
   lastSavedPostureStatus,
 }) {
-  if (!immersionId) {
+  if (immersionId === undefined || immersionId === null) {
     return {
       saved: false,
       nextSavedStatus: lastSavedPostureStatus,
       reason: 'IMMERSION_ID_MISSING',
+    };
+  }
+
+  if (typeof finalPosture !== 'string' || finalPosture.length === 0) {
+    return {
+      saved: false,
+      nextSavedStatus: lastSavedPostureStatus,
+      reason: 'INVALID_POSTURE_STATUS',
     };
   }
 
