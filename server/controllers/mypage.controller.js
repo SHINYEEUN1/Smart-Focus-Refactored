@@ -2,14 +2,14 @@ const mypageService = require('../services/mypage.service');
 const { sendSuccess, sendFail } = require('../utils/response');
 const { RESPONSE_CODES } = require('../../shared/constants/response-codes');
 
-function isOwner(userIdxFromParams, sessionUser) {
-  return Number(userIdxFromParams) === Number(sessionUser?.user_idx);
+function isOwner(userIdxFromParams, user) {
+  return Number(userIdxFromParams) === Number(user?.user_idx);
 }
 
 async function getStats(req, res, next) {
   const { user_idx: userIdx } = req.params;
 
-  if (!isOwner(userIdx, req.session.user)) {
+  if (!isOwner(userIdx, req.user)) {
     return sendFail(res, 403, '권한이 없습니다.', RESPONSE_CODES.FORBIDDEN);
   }
 
@@ -24,7 +24,7 @@ async function getStats(req, res, next) {
 async function getHistory(req, res, next) {
   const { user_idx: userIdx } = req.params;
 
-  if (!isOwner(userIdx, req.session.user)) {
+  if (!isOwner(userIdx, req.user)) {
     return sendFail(res, 403, '권한이 없습니다.', RESPONSE_CODES.FORBIDDEN);
   }
 

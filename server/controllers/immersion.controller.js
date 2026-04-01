@@ -4,14 +4,13 @@ const { RESPONSE_CODES } = require('../../shared/constants/response-codes');
 
 async function startSession(req, res, next) {
   try {
-    const userIdx = req.session?.user?.user_idx;
+    const userIdx = req.user?.user_idx;
 
     if (!userIdx) {
       return sendFail(res, 401, '로그인이 필요합니다.', RESPONSE_CODES.UNAUTHORIZED);
     }
 
     const immIdx = await immersionService.startSession(userIdx);
-
     return sendSuccess(res, '집중 세션이 시작되었습니다.', { imm_idx: immIdx }, 201);
   } catch (error) {
     return next(error);
@@ -45,7 +44,7 @@ async function logData(req, res, next) {
 async function endSession(req, res, next) {
   try {
     const { imm_idx: immIdx, imm_score: immScore } = req.body;
-    const userIdx = req.session?.user?.user_idx;
+    const userIdx = req.user?.user_idx;
 
     if (!immIdx) {
       return sendFail(res, 400, 'imm_idx가 필요합니다.', RESPONSE_CODES.INVALID_IMMERSION_ID);
@@ -70,7 +69,7 @@ async function endSession(req, res, next) {
 async function getReport(req, res, next) {
   try {
     const { imm_idx: immIdx } = req.params;
-    const userIdx = req.session?.user?.user_idx;
+    const userIdx = req.user?.user_idx;
 
     if (!immIdx) {
       return sendFail(res, 400, 'imm_idx가 필요합니다.', RESPONSE_CODES.INVALID_IMMERSION_ID);
