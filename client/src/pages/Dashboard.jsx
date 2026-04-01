@@ -1,14 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Card from '../components/Card';
+/* shared 계층의 공통 UI인 Card 컴포넌트를 참조하도록 경로를 수정했습니다. */
+import Card from '../shared/ui/Card';
 import { io } from 'socket.io-client';
-
-// 💡 SFEngine.js import 완전 삭제 (이제 프론트에서 자체 계산하지 않음)
 
 export default function Dashboard() {
   const navigate = useNavigate();
 
-  // 비전 분석용 Ref
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const cameraRef = useRef(null);
@@ -16,7 +14,6 @@ export default function Dashboard() {
   const poseRef = useRef(null);
   const faceMeshRef = useRef(null);
 
-  // 실시간 통신 및 데이터 Ref
   const socketRef = useRef(null);
   const faceLandmarksRef = useRef(null);
   const decibelRef = useRef(0);
@@ -24,14 +21,12 @@ export default function Dashboard() {
   const needsCalibrationRef = useRef(false);
   const lastSentTimeRef = useRef(0);
 
-  // 세션 식별용 상태
   const [currentImmIdx, setCurrentImmIdx] = useState(null);
   const currentImmIdxRef = useRef(null);
 
   const [decibel, setDecibel] = useState(0);
   const [isFocusing, setIsFocusing] = useState(false);
   
-  // 기존 engineResult 대신, 서버에서 첫 데이터를 받았는지 확인하는 상태로 변경
   const [isEngineReady, setIsEngineReady] = useState(false); 
   
   const [focusSeconds, setFocusSeconds] = useState(0);
@@ -46,22 +41,17 @@ export default function Dashboard() {
 
     socketRef.current.on('analysis_result', (data) => {
       if (data.status === 'SUCCESS') {
-        setIsEngineReady(true); // 서버 응답이 오기 시작하면 로딩 스피너 해제
+        setIsEngineReady(true); 
         
         let currentStatus = 'NORMAL';
         const backendPosture = data.posture_status || data.postureStatus || '';
 
-        // 💡 1순위: 위험(_WARNING) 감지 (includes 사용)
-        // 엔진 코드 특성상 턱괴기(LEANING_ON_HAND)는 뒤에 꼬리표가 없으므로 별도로 위험 처리
         if (backendPosture.includes('_WARNING') || backendPosture === 'LEANING_ON_HAND') {
           currentStatus = 'WARNING';
         } 
-        // 💡 2순위: 주의(_CAUTION) 감지
-        // 위에서 WARNING에 안 걸린 경우에만 CAUTION 검사 (색상 꼬임 방지)
         else if (backendPosture.includes('_CAUTION')) {
           currentStatus = 'CAUTION';
         } 
-        // 💡 3순위: 그 외 정상 상태 (GOOD_POSTURE 등)
         else {
           currentStatus = 'NORMAL';
         }
@@ -72,7 +62,6 @@ export default function Dashboard() {
         const finalScore = data.current_score || 0; 
         setDisplayScore(finalScore);
 
-        // 히스토리 로그 업데이트 (최대 5개 유지)
         const time = new Date().toLocaleTimeString('ko-KR');
         setHistoryLog(prev => [{
           detected_at: time,
@@ -89,7 +78,6 @@ export default function Dashboard() {
     return () => { if (socketRef.current) socketRef.current.disconnect(); };
   }, []);
 
-  // 타이머 로직
   useEffect(() => {
     let interval;
     if (isFocusing) interval = setInterval(() => setFocusSeconds(p => p + 1), 1000);
@@ -150,7 +138,6 @@ export default function Dashboard() {
       ctx.strokeStyle = "rgba(234, 255, 113, 0.8)"; ctx.lineWidth = 2;
       res.poseLandmarks.forEach(p => { ctx.beginPath(); ctx.arc(p.x * 640, p.y * 480, 3, 0, 2 * Math.PI); ctx.fillStyle = "#D9F99D"; ctx.fill(); ctx.stroke(); }); ctx.restore();
 
-      // 💡 백엔드 요청에 맞춘 영점 조절(Calibration) 객체 데이터 확장
       if (needsCalibrationRef.current) { 
         const leftEar = res.poseLandmarks[7] || { x: 0, y: 0 };
         const leftShoulder = res.poseLandmarks[11] || { x: 0, y: 0 };
@@ -165,7 +152,6 @@ export default function Dashboard() {
         needsCalibrationRef.current = false; 
       }
 
-      // 더 이상 여기서 로컬 분석(evaluateSmartFocus)을 하지 않고, 백엔드 의존
       const now = Date.now();
       if (now - lastSentTimeRef.current >= 1000) {
         lastSentTimeRef.current = now;
@@ -223,7 +209,6 @@ export default function Dashboard() {
       }
       const actualUserIdx = JSON.parse(userInfoStr).user_idx;
 
-      // 💡 시작 API를 호출하면 백엔드에서 자동으로 reset_static_tracking()이 돕니다.
       const res = await fetch('http://localhost:3000/api/immersion/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -238,7 +223,6 @@ export default function Dashboard() {
 
         setIsFocusing(true);
         setFocusSeconds(0);
-        // 기존의 resetStaticTracking() 호출부 완전 삭제
         setHistoryLog([]);
         startCamera();
       } else {

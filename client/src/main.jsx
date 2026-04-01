@@ -1,18 +1,17 @@
-// src/main.jsx
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
-import './index.css'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 
-// 💡 1. 페이지 이동 기능(라우터)을 쓰기 위해 BrowserRouter를 불러옵니다.
-import { BrowserRouter } from 'react-router-dom'
+/* FSD 구조에 따라 app 계층으로 이동된 App 컴포넌트를 참조합니다. */
+import App from './app/App';
+/* 수정된 전역 스타일 파일을 최상단에서 불러옵니다. */
+import './App.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {/* 💡 2. App 컴포넌트를 BrowserRouter로 감싸줍니다. 
-        이제 App 안의 모든 페이지(Report, Dashboard 등)에서 자유롭게 이동할 수 있습니다! */}
+    {/* useNavigate 등 라우팅 기능을 앱 전체에 공급하기 위해 최상위에서 감싸줍니다. */}
     <BrowserRouter>
       <App />
     </BrowserRouter>
-  </React.StrictMode>,
-)
+  </React.StrictMode>
+);

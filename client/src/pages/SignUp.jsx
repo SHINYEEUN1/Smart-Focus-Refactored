@@ -1,22 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
-import AuthLayout from '../components/AuthLayout';
+/* widgets 계층의 AuthLayout 컴포넌트를 참조하도록 경로를 수정했습니다. */
+import AuthLayout from '../widgets/AuthLayout';
 
 export default function SignUp({ onNavigate, setIsLoggedIn }) {
-  // 닉네임 상태 관리
   const [nick, setNick] = useState('');
-  const [isNickChecked, setIsNickChecked] = useState(false); // 닉네임 중복 확인 여부
+  const [isNickChecked, setIsNickChecked] = useState(false);
 
-  // 이메일 상태 관리
   const [email, setEmail] = useState('');
   const [showEmailSuggestions, setShowEmailSuggestions] = useState(false);
   const [isCodeSent, setIsCodeSent] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   
-  const emailRef = useRef(null); // 이메일 자동완성 드롭다운 외부 클릭 감지용
+  const emailRef = useRef(null); 
   const emailDomains = ['gmail.com', 'naver.com', 'daum.net', 'kakao.com'];
 
-  // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (emailRef.current && !emailRef.current.contains(event.target)) {
@@ -27,13 +25,11 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 1. 닉네임 변경 핸들러 (수정 시 중복 확인 초기화)
   const handleNickChange = (e) => {
     setNick(e.target.value);
     setIsNickChecked(false); 
   };
 
-  // 2. 닉네임 중복 확인 API
   const handleCheckNick = async () => {
     if (!nick.trim()) {
       alert("닉네임을 입력해주세요.");
@@ -41,7 +37,6 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
     }
 
     try {
-      // TODO: 백엔드 닉네임 중복 체크 API 연결
       const res = await fetch('http://localhost:3000/auth/check-nick', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,19 +53,14 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
       }
     } catch (err) {
       console.error("닉네임 중복 체크 에러:", err);
-      // 백엔드 API가 아직 없을 때 임시 통과를 원하면 아래 주석 해제
-      // alert("[임시] 사용 가능한 닉네임입니다. (API 미연동)");
-      // setIsNickChecked(true);
       alert("서버 통신 오류가 발생했습니다.");
     }
   };
 
-  // 3. 이메일 입력 및 자동완성 핸들러
   const handleEmailChange = (e) => {
     const value = e.target.value;
     setEmail(value);
 
-    // '@'가 포함되어 있고 아직 도메인이 완성되지 않았을 때 드롭다운 표시
     if (value.includes('@')) {
       const [, domainPart] = value.split('@');
       if (!emailDomains.includes(domainPart)) {
@@ -83,14 +73,12 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
     }
   };
 
-  // 자동완성 도메인 클릭 적용
   const selectEmailDomain = (domain) => {
     const [idPart] = email.split('@');
     setEmail(`${idPart}@${domain}`);
     setShowEmailSuggestions(false);
   };
 
-  // 4. 이메일 인증번호 발송 API
   const handleSendCode = async () => {
     if (!email.includes('@') || !email.includes('.')) {
       alert("올바른 이메일 형식을 입력해 주세요.");
@@ -117,7 +105,6 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
     }
   };
 
-  // 5. 이메일 인증번호 검증 API
   const handleVerifyCode = async () => {
     if (!verificationCode) return;
     
@@ -141,7 +128,6 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
     }
   };
 
-  // 6. 최종 회원가입 진행
   const handleSignUp = async (e) => {
     e.preventDefault();
     
@@ -167,7 +153,6 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
       if (res.ok && data.success) {
         alert("회원가입 완료! 자동으로 로그인합니다.");
         
-        // 가입 성공 시 자동 로그인 연동
         const loginRes = await fetch('http://localhost:3000/user/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -195,8 +180,6 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
   return (
     <AuthLayout title="회원가입" subtitle="스마트 포커스와 함께 집중력을 높여보세요!">
       <form className="flex flex-col gap-5 mt-8" onSubmit={handleSignUp}>
-        
-        {/* 닉네임 입력 및 중복 확인 영역 */}
         <div>
           <label className="text-sm font-bold text-slate-700 block px-1 mb-2">닉네임</label>
           <div className="flex gap-2">
@@ -223,7 +206,6 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
           </div>
         </div>
         
-        {/* 이메일 입력, 자동완성 드롭다운, 인증 발송 영역 */}
         <div ref={emailRef} className="relative">
           <label className="text-sm font-bold text-slate-700 block px-1 mb-2">이메일 계정</label>
           <div className="flex gap-2">
@@ -251,7 +233,6 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
             </button>
           </div>
 
-          {/* 자동완성 드롭다운 UI */}
           {showEmailSuggestions && !isVerified && (
             <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden animate-fade-in">
               {emailDomains.map((domain) => (
@@ -267,7 +248,6 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
           )}
         </div>
 
-        {/* 인증번호 입력 영역 (발송 버튼 누른 후 노출) */}
         {isCodeSent && !isVerified && (
           <div className="flex gap-2 animate-fade-in">
             <input 
@@ -287,7 +267,6 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
           </div>
         )}
 
-        {/* 비밀번호 입력 영역 */}
         <div>
           <label className="text-sm font-bold text-slate-700 block px-1 mb-2">비밀번호</label>
           <input 
@@ -299,7 +278,6 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
           />
         </div>
 
-        {/* 가입 완료 버튼 (닉네임 중복확인 및 이메일 인증 통과 시 활성화) */}
         <button 
           type="submit" 
           disabled={!isNickChecked || !isVerified} 

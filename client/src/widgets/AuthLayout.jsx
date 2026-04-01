@@ -1,6 +1,7 @@
 import React from 'react';
-import Card from './Card';
-import Logo from './Logo';
+/* FSD 계층 구조에 맞게 shared/ui 폴더의 컴포넌트들을 참조하도록 경로를 수정했습니다. */
+import Card from '../shared/ui/Card';
+import Logo from '../shared/ui/Logo';
 
 export default function AuthLayout({ title, subtitle, children }) {
   return (

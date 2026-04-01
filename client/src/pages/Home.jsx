@@ -1,5 +1,6 @@
 import React from 'react';
-import Card from '../components/Card';
+/* shared 계층의 공통 UI인 Card 컴포넌트를 참조하도록 경로를 수정했습니다. */
+import Card from '../shared/ui/Card';
 
 export default function Home({ onStart }) {
   return (
