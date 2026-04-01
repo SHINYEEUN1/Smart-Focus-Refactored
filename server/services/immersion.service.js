@@ -5,6 +5,9 @@ const {
   GOOD_POSTURE_STATUS,
 } = require('../../shared/constants/posture');
 
+/**
+ * 점수 계산 및 보상 지급을 위한 상수 정의
+ */
 const SCORE_RULE = {
   DEFAULT_SCORE: 100,
   DEFAULT_DECIBEL: 30,
@@ -15,12 +18,22 @@ const SCORE_RULE = {
   LOW_REWARD: 10,
 };
 
+/**
+ * 자세 상태 문자열을 기반으로 기본 자세 타입(GOOD/BAD)을 반환합니다.
+ * @param {string} poseStatus - 현재 자세 상태
+ * @returns {string} POSE_TYPE.GOOD 또는 POSE_TYPE.BAD
+ */
 function getPoseTypeFromStatus(poseStatus) {
   return GOOD_POSTURE_STATUS.includes(poseStatus)
     ? POSE_TYPE.GOOD
     : POSE_TYPE.BAD;
 }
 
+/**
+ * 차트 데이터의 빈 구간(NULL)을 이전 데이터 값으로 채워 연속성을 보장합니다.
+ * @param {Array} chartData - DB에서 조회된 원본 차트 데이터
+ * @returns {Array} 결측치가 보완된 차트 데이터 배열
+ */
 function fillChartData(chartData) {
   let lastScore = SCORE_RULE.DEFAULT_SCORE;
   let lastDecibel = SCORE_RULE.DEFAULT_DECIBEL;
@@ -44,6 +57,11 @@ function fillChartData(chartData) {
   });
 }
 
+/**
+ * 새로운 집중 세션을 DB에 생성합니다.
+ * @param {number} userIdx - 사용자 식별자
+ * @returns {Promise<number>} 생성된 세션의 고유 식별자(imm_idx)
+ */
 async function startSession(userIdx) {
   const sql = `
     INSERT INTO immersions (user_idx, imm_date, start_time, imm_score, max_good_streak)
@@ -54,9 +72,13 @@ async function startSession(userIdx) {
   return result.insertId;
 }
 
+/**
+ * 진행 중인 세션의 소음 및 자세 로그 데이터를 저장합니다.
+ * @param {Object} params - 로그 데이터 객체 (immIdx, noise, pose 포함)
+ */
 async function logSessionData({ immIdx, noise, pose }) {
   if (process.env.NODE_ENV !== 'production') {
-    console.log('==== [DEBUG] 리액트에서 받은 원본 데이터 ====');
+    console.log('==== [DEBUG] 클라이언트 수신 데이터 ====');
     console.log({ immIdx, noise, pose });
   }
 
@@ -79,7 +101,7 @@ async function logSessionData({ immIdx, noise, pose }) {
     const poseType = pose.pose_type || getPoseTypeFromStatus(poseStatus);
 
     if (process.env.NODE_ENV !== 'production') {
-      console.log('---- [DEBUG] DB 저장 직전 변수 상태 ----');
+      console.log('---- [DEBUG] DB 저장 파라미터 확인 ----');
       console.log('- imm_idx:', immIdx);
       console.log('- poseType:', poseType);
       console.log('- poseStatus:', poseStatus);
@@ -94,6 +116,11 @@ async function logSessionData({ immIdx, noise, pose }) {
   }
 }
 
+/**
+ * 세션을 종료하고 최종 점수 산출 및 보상을 지급합니다.
+ * 트랜잭션을 적용하여 데이터 정합성을 보장합니다.
+ * @param {Object} params - 세션 종료 파라미터 (immIdx, userIdx, immScore)
+ */
 async function endSession({ immIdx, userIdx, immScore }) {
   const conn = await db.getConnection();
 
@@ -101,9 +128,9 @@ async function endSession({ immIdx, userIdx, immScore }) {
     await conn.beginTransaction();
 
     const [poseStats] = await conn.query(
-  `SELECT COUNT(*) AS cnt FROM poses WHERE imm_idx = ? AND pose_type = ?`,
-  [immIdx, POSE_TYPE.BAD]
-);
+      `SELECT COUNT(*) AS cnt FROM poses WHERE imm_idx = ? AND pose_type = ?`,
+      [immIdx, POSE_TYPE.BAD]
+    );
 
     const badPoseCount = poseStats[0]?.cnt || 0;
 
@@ -150,6 +177,11 @@ async function endSession({ immIdx, userIdx, immScore }) {
   }
 }
 
+/**
+ * 특정 세션의 상세 분석 리포트 데이터를 조회하여 병합 반환합니다.
+ * 에러 원인이었던 SQL 구문(쉼표 누락)을 수정했습니다.
+ * @param {Object} params - 조회할 세션 파라미터 (immIdx, userIdx)
+ */
 async function getReport({ immIdx, userIdx }) {
   const [sessionInfo] = await db.query(
     `
@@ -169,6 +201,7 @@ async function getReport({ immIdx, userIdx }) {
     return null;
   }
 
+  /* 세션에 연관된 소음 요약, 자세 요약, 시계열 차트 데이터를 병렬로 조회합니다. */
   const [noiseSummaryResult, poseSummaryResult, chartDataResult] = await Promise.all([
     db.query(
       `
@@ -209,7 +242,7 @@ async function getReport({ immIdx, userIdx }) {
             WHEN pose_type = '${POSE_TYPE.GOOD}' THEN 100
             WHEN pose_type = '${POSE_TYPE.BAD}' THEN 40
             ELSE NULL
-            END AS imm_score
+            END AS imm_score,
             NULL AS decibel,
             detected_at
           FROM poses

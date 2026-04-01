@@ -1,12 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-/* shared 계층의 공통 UI인 Card 컴포넌트를 참조하도록 경로를 수정했습니다. */
-import Card from '../shared/ui/Card';
 import { io } from 'socket.io-client';
 
+/* FSD 아키텍처 규격에 따른 API 모듈 및 공통 UI 임포트 */
+import Card from '../shared/ui/Card';
+import { immersionApi } from '../shared/api';
+
+/**
+ * 실시간 AI 비전 분석 및 몰입도 측정 대시보드 컴포넌트
+ */
 export default function Dashboard() {
   const navigate = useNavigate();
 
+  /* 미디어 장치 및 분석 엔진 참조를 위한 Ref 선언 */
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const cameraRef = useRef(null);
@@ -14,6 +20,7 @@ export default function Dashboard() {
   const poseRef = useRef(null);
   const faceMeshRef = useRef(null);
 
+  /* 실시간 데이터 통신 및 캘리브레이션 관리를 위한 Ref 선언 */
   const socketRef = useRef(null);
   const faceLandmarksRef = useRef(null);
   const decibelRef = useRef(0);
@@ -21,21 +28,24 @@ export default function Dashboard() {
   const needsCalibrationRef = useRef(false);
   const lastSentTimeRef = useRef(0);
 
+  /* 세션 식별자 및 UI 상태 관리 */
   const [currentImmIdx, setCurrentImmIdx] = useState(null);
   const currentImmIdxRef = useRef(null);
 
   const [decibel, setDecibel] = useState(0);
   const [isFocusing, setIsFocusing] = useState(false);
-  
   const [isEngineReady, setIsEngineReady] = useState(false); 
-  
   const [focusSeconds, setFocusSeconds] = useState(0);
   const [historyLog, setHistoryLog] = useState([]);
 
+  /* 서버 피드백 및 상태 표시 관리 */
   const [serverFeedback, setServerFeedback] = useState("우측 상단의 '▶ 측정 시작' 버튼을 눌러주세요.");
   const [serverStatus, setServerStatus] = useState('--');
   const [displayScore, setDisplayScore] = useState('--');
 
+  /**
+   * 소켓 통신 초기화 및 서버 분석 결과 수신 핸들러
+   */
   useEffect(() => {
     socketRef.current = io('http://localhost:3000', { withCredentials: true });
 
@@ -78,6 +88,9 @@ export default function Dashboard() {
     return () => { if (socketRef.current) socketRef.current.disconnect(); };
   }, []);
 
+  /**
+   * 측정 진행 시간 카운터 로직
+   */
   useEffect(() => {
     let interval;
     if (isFocusing) interval = setInterval(() => setFocusSeconds(p => p + 1), 1000);
@@ -90,6 +103,9 @@ export default function Dashboard() {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  /**
+   * 미디어 파이프 분석 엔진 및 카메라 구동 로직
+   */
   const startCamera = async () => {
     setServerFeedback("AI 분석 엔진을 준비 중입니다. 잠시만 기다려주세요...");
 
@@ -186,6 +202,9 @@ export default function Dashboard() {
     }
   };
 
+  /**
+   * 장치 연결 해제 및 리소스 클린업
+   */
   const stopCamera = () => {
     if (cameraRef.current) { cameraRef.current.stop(); cameraRef.current = null; }
     if (videoRef.current?.srcObject) { videoRef.current.srcObject.getTracks().forEach(t => t.stop()); videoRef.current.srcObject = null; }
@@ -199,6 +218,9 @@ export default function Dashboard() {
     setDisplayScore('--');
   };
 
+  /**
+   * 측정 시작 핸들러: shared 응답 규격(data.data.imm_idx) 반영
+   */
   const handleStartMeasurement = async () => {
     try {
       const userInfoStr = localStorage.getItem('user_info');
@@ -209,40 +231,42 @@ export default function Dashboard() {
       }
       const actualUserIdx = JSON.parse(userInfoStr).user_idx;
 
-      const res = await fetch('http://localhost:3000/api/immersion/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_idx: actualUserIdx }),
-        credentials: 'include'
-      });
-      const data = await res.json();
+      /* immersionApi 모듈 연동 */
+      const result = await immersionApi.start(actualUserIdx);
 
-      if (data.success) {
-        setCurrentImmIdx(data.imm_idx);
-        currentImmIdxRef.current = data.imm_idx; 
+      /* 백엔드 shared 규격에 맞춰 imm_idx 추출 로직 수정 */
+      if (result && result.success && result.data?.imm_idx) {
+        const immIdx = result.data.imm_idx;
+        setCurrentImmIdx(immIdx);
+        currentImmIdxRef.current = immIdx; 
 
         setIsFocusing(true);
         setFocusSeconds(0);
         setHistoryLog([]);
         startCamera();
       } else {
-        alert("세션 시작에 실패했습니다.");
+        alert(result?.message || "세션 시작에 실패했습니다.");
       }
     } catch (err) {
-      console.error("측정 시작 에러:", err);
+      console.error("측정 시작 에러:", err.message);
       alert("서버 통신 중 에러가 발생했습니다.");
     }
   };
 
+  /**
+   * 측정 종료 핸들러: 리포트 이동 로직 및 shared 규격 동기화
+   */
   const handleStopMeasurement = async () => {
     setIsFocusing(false);
     stopCamera();
 
-    if (!currentImmIdxRef.current) return;
+    if (!currentImmIdxRef.current) {
+      alert("진행 중인 세션 정보를 찾을 수 없습니다.");
+      return;
+    }
 
     try {
       const finalScore = displayScore === '--' ? 0 : parseInt(displayScore, 10);
-
       const userInfoStr = localStorage.getItem('user_info');
       if (!userInfoStr) {
         alert("세션이 만료되었습니다.");
@@ -251,31 +275,28 @@ export default function Dashboard() {
       }
       const actualUserIdx = JSON.parse(userInfoStr).user_idx;
 
-      const res = await fetch('http://localhost:3000/api/immersion/end', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imm_idx: currentImmIdxRef.current,
-          imm_score: finalScore,
-          user_idx: actualUserIdx 
-        }),
-        credentials: 'include'
+      /* immersionApi 모듈 연동 */
+      const result = await immersionApi.end({
+        imm_idx: currentImmIdxRef.current,
+        imm_score: finalScore,
+        user_idx: actualUserIdx 
       });
-      const data = await res.json();
 
-      if (data.success) {
+      /* 백엔드 shared 규격 검증 후 리포트 상세 페이지로 이동 */
+      if (result && result.success) {
         alert("집중 수고하셨습니다! 분석 리포트로 이동합니다.");
         navigate(`/report/${currentImmIdxRef.current}`);
       } else {
-        alert("측정 기록 저장에 실패했습니다.");
+        alert(result?.message || "측정 기록 저장에 실패했습니다.");
       }
     } catch (err) {
-      console.error("측정 종료 에러:", err);
+      console.error("측정 종료 에러:", err.message);
     }
   };
 
   const displayStatusLabel = serverStatus === 'WARNING' ? '위험' : serverStatus === 'CAUTION' ? '주의' : serverStatus === 'NORMAL' ? '정상' : '--';
 
+  /* UI 렌더링 영역 유지 */
   return (
     <div className="max-w-[1400px] mx-auto min-h-[90vh] p-6 lg:p-10 animate-fade-in font-sans selection:bg-indigo-100">
 

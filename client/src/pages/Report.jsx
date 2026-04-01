@@ -8,9 +8,12 @@ import {
   LineElement, Title, Tooltip, Legend, Filler
 } from 'chart.js';
 
+/* FSD 아키텍처 규격에 따른 공통 API 모듈 참조 */
+import { immersionApi } from '../shared/api';
+
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-// --- 공통 SVG 아이콘 컴포넌트 ---
+/* --- 공통 SVG 아이콘 컴포넌트 정의 --- */
 const ListIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -26,23 +29,25 @@ const ChartAreaIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
 );
 
+/**
+ * 몰입 분석 리포트 페이지 컴포넌트
+ * 백엔드 shared 응답 표준을 준수하며 차트 및 세션 요약 데이터를 시각화함
+ */
 export default function Report() {
   const navigate = useNavigate();
-  const { imm_idx } = useParams(); // URL 파라미터 (e.g. /report/123)
+  const { imm_idx } = useParams();
 
-  // 💡 Mode 판정: URL 파라미터가 없거나 'undefined'면 '전체 목록' 모드로 작동
+  /* URL 파라미터 존재 여부에 따라 '상세 보기'와 '전체 목록' 모드를 전환함 */
   const isDetailsMode = imm_idx && imm_idx !== 'undefined';
 
-  // 상태 관리 세팅
   const [isLoading, setIsLoading] = useState(true);
-  const [reportData, setReportData] = useState(null); // 현재 상세 리포트 데이터
-  const [fullHistory, setFullHistory] = useState([]); // 전체 히스토리 리스트 (목록 모드용)
-  const [bottomHistory, setBottomHistory] = useState([]); // 하단 미니 리스트 (상세 모드용)
+  const [reportData, setReportData] = useState(null); 
+  const [fullHistory, setFullHistory] = useState([]); 
+  const [bottomHistory, setBottomHistory] = useState([]); 
 
   const reportRef = useRef(null);
   const [isExporting, setIsExporting] = useState(false);
 
-  // 전역 데이터 페칭 로직
   useEffect(() => {
     const fetchAllData = async () => {
       try {
@@ -55,51 +60,49 @@ export default function Report() {
         }
         const user_idx = JSON.parse(userInfoStr).user_idx;
 
-        // =========================================================
-        // 💡 Case A: 전체 몰입 기록 목록 조회 모드 (스크린샷 해결책)
-        // =========================================================
+        /* 목록 모드: 사용자의 전체 몰입 히스토리 조회 */
         if (!isDetailsMode) {
-          const historyRes = await fetch(`http://localhost:3000/api/mypage/history/${user_idx}`, { credentials: 'include' });
-          const historyResult = await historyRes.json();
-          if (historyResult.success && historyResult.data) {
-            setFullHistory(historyResult.data); // 전체 데이터 세팅
+          const historyResult = await immersionApi.getHistory(user_idx);
+          if (historyResult && historyResult.success) {
+            setFullHistory(historyResult.data || []); 
           }
           setIsLoading(false);
-          return; // 목록 모드면 여기서 페칭 로직 종료
+          return; 
         }
 
-        // =========================================================
-        // 💡 Case B: 특정 리포트 상세 조회 모드 (기존 로직 유지)
-        // =========================================================
-        // 1. 현재 리포트 상세 데이터 & 2. 유저 전체 히스토리 병렬 페칭 (마이페이지 API 재활용)
-        const [reportRes, historyRes] = await Promise.all([
-          fetch(`http://localhost:3000/api/immersion/report/${imm_idx}`, { method: 'GET', credentials: 'include' }),
-          fetch(`http://localhost:3000/api/mypage/history/${user_idx}`, { credentials: 'include' })
+        /* 상세 모드: 특정 세션 리포트 및 하단 추천 리스트 병렬 조회 */
+        const [reportResult, historyResult] = await Promise.all([
+          immersionApi.getReportDetail(imm_idx),
+          immersionApi.getHistory(user_idx)
         ]);
 
-        const reportResult = await reportRes.json();
-        const historyResult = await historyRes.json();
+        /* 백엔드 shared 규격(result.success, result.data) 반영 */
+        if (reportResult && reportResult.success && reportResult.data) {
+          const rawData = reportResult.data; 
+          const { session, noise_summary, pose_summary, chart_data } = rawData;
 
-        // 메인 리포트 상세 가공
-        if (reportResult.success && reportResult.data) {
-          const { session, noise_summary, pose_summary, chart_data } = reportResult.data;
+          if (!session) {
+            setIsLoading(false);
+            return;
+          }
 
+          /* 시간 단위 변환 및 데이터 가공 */
           const totalSecs = session.total_seconds || 0;
           const hrs = Math.floor(totalSecs / 3600).toString().padStart(2, '0');
           const mins = Math.floor((totalSecs % 3600) / 60).toString().padStart(2, '0');
           const secs = (totalSecs % 60).toString().padStart(2, '0');
 
           const totalWarnings = pose_summary
-            .filter(pose => pose.pose_status !== 'GOOD_POSTURE' && pose.pose_status !== 'NORMAL')
-            .reduce((sum, pose) => sum + pose.count, 0);
+            ?.filter(pose => pose.pose_status !== 'GOOD_POSTURE' && pose.pose_status !== 'NORMAL')
+            .reduce((sum, pose) => sum + pose.count, 0) || 0;
 
+          /* 차트 렌더링 최적화를 위한 데이터 샘플링 (최대 60포인트) */
           let rawChartData = chart_data?.map(item => ({
             label: item.time_label, 
             score: item.imm_score || 0,
             noise: item.decibel || 0
           })) || [];
 
-          // 차트 데이터가 너무 많을 경우(60개 이상) 렌더링 부하 최소화를 위해 일정 구간 샘플링
           const MAX_POINTS = 60;
           let processedData = rawChartData;
 
@@ -130,9 +133,7 @@ export default function Report() {
           });
         }
 
-        // 하단 미니 기록 리스트 가공
-        if (historyResult.success && historyResult.data) {
-          // 현재 보고 있는 리포트(imm_idx)는 리스트에서 제외하고 최신순으로 4개만 필터링
+        if (historyResult && historyResult.success && historyResult.data) {
           const filteredBottomHistory = historyResult.data
             .filter(item => String(item.imm_idx) !== String(imm_idx))
             .slice(0, 4);
@@ -140,7 +141,8 @@ export default function Report() {
         }
 
       } catch (error) {
-        console.error("데이터 페칭 중 예외 발생:", error);
+        console.error("API 데이터 조회 실패:", error.message);
+        alert("서버 통신 오류가 발생했습니다.");
       } finally {
         setIsLoading(false);
       }
@@ -149,7 +151,9 @@ export default function Report() {
     fetchAllData();
   }, [imm_idx, navigate, isDetailsMode]);
 
-  // PDF 내보내기 로직 (상세 모드에서만 사용)
+  /**
+   * 리포트 화면을 캡처하여 PDF 파일로 내보내기합니다.
+   */
   const handleExportPDF = async () => {
     if (!reportRef.current) return;
     setIsExporting(true);
@@ -167,48 +171,41 @@ export default function Report() {
         const safeDate = reportData?.summary?.date ? String(reportData.summary.date).substring(0, 10) : 'report';
         pdf.save(`Focus_Report_${safeDate}.pdf`);
       } catch (err) {
-        console.error('PDF 내보내기 에러:', err);
-        alert(`PDF 생성 중 오류가 발생했습니다.`);
+        console.error('PDF 생성 오류:', err.message);
       } finally {
         setIsExporting(false);
       }
     }, 500);
   };
 
-  // 로딩 상태 스켈레톤 UI
   if (isLoading) {
     return (
       <div className="min-h-[85vh] flex flex-col items-center justify-center gap-4">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-500 font-bold tracking-widest animate-pulse">분석 데이터를 조회하는 중입니다...</p>
+        <p className="text-slate-500 font-bold tracking-widest animate-pulse">데이터를 불러오는 중...</p>
       </div>
     );
   }
 
-  // 데이터 가공 전 예외 처리 (상세 모드인데 데이터 없는 경우)
   if (isDetailsMode && !reportData) {
     return (
       <div className="max-w-[1400px] mx-auto min-h-[85vh] flex items-center justify-center p-4">
         <div className="max-w-xl w-full bg-white p-12 rounded-3xl shadow-sm border border-slate-200 text-center flex flex-col items-center gap-4">
           <div className="text-7xl mb-4 opacity-50">📭</div>
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">데이터를 찾을 수 없습니다</h2>
-          <p className="text-slate-500 text-lg mb-8 font-medium break-keep">존재하지 않거나 삭제된 세션 기록입니다.</p>
+          <p className="text-slate-500 text-lg mb-8 font-medium">삭제되었거나 유효하지 않은 세션 기록입니다.</p>
           <button onClick={() => navigate('/report')} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-200 active:scale-95 text-lg">
-            전체 리포트 목록 보기
+            전체 보관함 보기
           </button>
         </div>
       </div>
     );
   }
 
-  // =========================================================================
-  // 💡 [렌더링 Case 1] 전체 몰입 기록 목록 조회 화면 (스크린샷 해결책)
-  // =========================================================================
+  /* 렌더링 Case 1: 리포트 보관함 (목록 모드) */
   if (!isDetailsMode) {
     return (
       <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans selection:bg-indigo-100">
-        
-        {/* 목록 모드 헤더 */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-10 pb-6 border-b border-slate-200/60 gap-4 md:gap-0">
           <div>
             <h2 className="text-2xl md:text-3xl font-black tracking-tighter text-slate-900 mb-1">분석 리포트 보관함</h2>
@@ -221,15 +218,14 @@ export default function Report() {
           </div>
         </div>
 
-        {/* 목록 그리드 (대시보드 스타일의 카드 재활용) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {fullHistory.length === 0 ? (
             <div className="col-span-full py-20 text-center bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col items-center">
               <div className="text-8xl mb-8">🌱</div>
-              <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">아직 기록된 리포트가 없습니다</h2>
-              <p className="text-slate-500 text-lg mb-10 font-medium break-keep">대시보드에서 첫 집중 측정을 시작하고 AI 분석을 받아보세요!</p>
+              <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">기록된 리포트가 없습니다</h2>
+              <p className="text-slate-500 text-lg mb-10 font-medium">대시보드에서 첫 집중 측정을 시작해 보세요!</p>
               <button onClick={() => navigate('/dashboard')} className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-200 active:scale-95 text-lg">
-                ▶ 집중 측정하러 가기
+                ▶ 집중 측정 시작
               </button>
             </div>
           ) : (
@@ -238,24 +234,15 @@ export default function Report() {
               const historyDateStr = `${sessionDate.getFullYear()}년 ${sessionDate.getMonth() + 1}월 ${sessionDate.getDate()}일`;
 
               return (
-                <div
-                  key={idx}
-                  onClick={() => navigate(`/report/${session.imm_idx}`)}
-                  className="p-6 rounded-3xl border border-slate-100 bg-white hover:border-indigo-200 hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer group flex flex-col h-full shadow-sm"
-                >
+                <div key={idx} onClick={() => navigate(`/report/${session.imm_idx}`)} className="p-6 rounded-3xl border border-slate-100 bg-white hover:border-indigo-200 hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer group flex flex-col h-full shadow-sm">
                   <div className="flex justify-between items-center mb-5">
                     <span className="font-extrabold text-slate-700 text-lg">{historyDateStr}</span>
-                    <span className="text-sm font-black text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
-                      {session.imm_score}점
-                    </span>
+                    <span className="text-sm font-black text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">{session.imm_score}점</span>
                   </div>
                   <div className="text-sm text-slate-500 font-medium space-y-2 mt-auto">
-                    <p className="flex justify-between items-center border-b border-slate-100 pb-2"><span>시작 시간</span> <span className="text-slate-900 font-semibold">{session.start_time?.substring(0, 5)}</span></p>
-                    <p className="flex justify-between items-center border-b border-slate-100 pb-2"><span>총 집중</span> <span className="text-slate-900 font-semibold">{session.formatted_time || '0분'}</span></p>
-                    <p className="flex justify-between items-center"><span>자세 이탈</span> <span className="text-rose-500 font-semibold">{session.pose_count}회</span></p>
-                  </div>
-                  <div className="mt-6 pt-5 border-t border-slate-100 text-center font-bold text-indigo-600 group-hover:text-indigo-700 text-sm flex items-center justify-center gap-1.5">
-                    자세히 보기 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                    <p className="flex justify-between border-b border-slate-100 pb-2"><span>시작 시간</span> <span className="text-slate-900 font-semibold">{session.start_time?.substring(0, 5)}</span></p>
+                    <p className="flex justify-between border-b border-slate-100 pb-2"><span>총 집중</span> <span className="text-slate-900 font-semibold">{session.formatted_time || '0분'}</span></p>
+                    <p className="flex justify-between"><span>자세 이탈</span> <span className="text-rose-500 font-semibold">{session.pose_count}회</span></p>
                   </div>
                 </div>
               );
@@ -266,11 +253,7 @@ export default function Report() {
     );
   }
 
-  // =========================================================================
-  // 💡 [렌더링 Case 2] 특정 리포트 상세 조회 화면 (기존 UI 유지 + 하단 미니 목록)
-  // =========================================================================
-  
-  // 상세 모드 전용 변수 세팅
+  /* 렌더링 Case 2: 리포트 상세 보기 (차트 및 요약) */
   const chartOptions = {
     responsive: true, maintainAspectRatio: false, animation: false,
     plugins: {
@@ -308,15 +291,13 @@ export default function Report() {
 
   return (
     <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans selection:bg-indigo-100" ref={reportRef}>
-
-      {/* 리포트 헤더 (상세 모드용) */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-10 pb-6 border-b border-slate-200/60 gap-4 md:gap-0">
         <div>
           <button onClick={() => navigate('/report')} className="text-sm font-bold text-indigo-600 mb-2.5 flex items-center gap-1.5 group">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transform transition-transform group-hover:-translate-x-1"><path d="m15 18-6-6 6-6"/></svg> 보관함으로 돌아가기
           </button>
           <h2 className="text-2xl md:text-3xl font-black tracking-tighter text-slate-900 mb-1">종합 분석 리포트</h2>
-          <p className="text-sm md:text-base text-slate-500 font-medium">측정된 집중 패턴 및 주변 환경에 대한 상세 분석 결과를 확인해 보세요.</p>
+          <p className="text-sm md:text-base text-slate-500 font-medium">측정된 집중 패턴 및 주변 환경에 대한 분석 결과입니다.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
@@ -324,17 +305,13 @@ export default function Report() {
             📅 측정일 : {formattedDetailDate}
           </div>
           {!isExporting && (
-            <button
-              onClick={handleExportPDF}
-              className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs md:text-sm font-bold shadow-md hover:bg-slate-700 transition-all flex items-center gap-2"
-            >
+            <button onClick={handleExportPDF} className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs md:text-sm font-bold shadow-md hover:bg-slate-700 transition-all flex items-center gap-2">
               📥 PDF 저장
             </button>
           )}
         </div>
       </div>
 
-      {/* 종합 요약 카드 4종 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
         {[
           { label: '총 집중 시간', value: reportData.summary.time, unit: '', icon: '⏱️', color: 'text-indigo-600', bg: 'bg-indigo-50' },
@@ -343,69 +320,43 @@ export default function Report() {
           { label: '주요 방해 소음', value: reportData.summary.mainNoise, unit: '', icon: '🎧', color: 'text-amber-500', bg: 'bg-amber-50' }
         ].map((item, idx) => (
           <div key={idx} className="bg-white p-5 md:p-7 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 md:gap-5 hover:shadow-md transition-all cursor-default">
-            <div className={`w-12 h-12 md:w-14 md:h-14 min-w-[48px] md:min-w-[56px] rounded-full flex items-center justify-center text-xl md:text-2xl border border-white shadow-inner ${item.bg} ${item.color}`}>
-              {item.icon}
-            </div>
+            <div className={`w-12 h-12 md:w-14 md:h-14 min-w-[48px] rounded-full flex items-center justify-center text-xl md:text-2xl border border-white shadow-inner ${item.bg} ${item.color}`}>{item.icon}</div>
             <div className="overflow-hidden">
               <p className="text-xs md:text-sm font-semibold text-slate-400 mb-1">{item.label}</p>
-              <p className={`text-xl md:text-2xl font-black tracking-tight truncate text-slate-900 ${idx === 0 ? 'font-mono' : ''}`}>
-                {item.value}<span className="text-base md:text-lg text-slate-400 font-bold ml-1">{item.unit}</span>
-              </p>
+              <p className={`text-xl md:text-2xl font-black tracking-tight truncate text-slate-900 ${idx === 0 ? 'font-mono' : ''}`}>{item.value}<span className="text-base text-slate-400 font-bold ml-1">{item.unit}</span></p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* 시간대별 트렌드 차트 영역 */}
-      <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm">
+      <div className="bg-white p-5 md:p-8 rounded-2xl border border-slate-100 shadow-sm">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 md:mb-8 px-2 gap-3 sm:gap-0">
           <h3 className="text-base md:text-lg font-bold text-slate-900 tracking-tight">시간대별 몰입 트렌드 분석</h3>
-          <div className="flex gap-4 md:gap-5 text-xs md:text-sm font-bold text-slate-500">
-            <span className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-[#5B44F2] shadow-[0_0_10px_rgba(91,68,242,0.4)]"></span>몰입 에너지
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full border-2 border-[#cbd5e1] border-dashed"></span>주변 소음
-            </span>
-          </div>
         </div>
-        <div className="h-[250px] sm:h-[300px] md:h-[400px] w-full">
-          <Line data={lineData} options={chartOptions} />
-        </div>
+        <div className="h-[250px] sm:h-[300px] md:h-[400px] w-full"><Line data={lineData} options={chartOptions} /></div>
       </div>
 
-      {/* 하단 미니 기록 리스트 영역 (다른 날짜 보기) */}
-      <div className="mt-8 bg-white p-5 md:p-8 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm">
-        <div className="flex items-center gap-3 mb-6 md:mb-8 px-2">
-          <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-600 border border-slate-100">
-            <ChartAreaIcon />
-          </div>
-          <h3 className="text-base md:text-lg font-bold text-slate-900 tracking-tight">다른 날짜의 몰입 기록 바로보기</h3>
+      <div className="mt-8 bg-white p-5 md:p-8 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-3 mb-6 px-2">
+          <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-600 border border-slate-100"><ChartAreaIcon /></div>
+          <h3 className="text-base md:text-lg font-bold text-slate-900 tracking-tight">다른 날짜의 몰입 기록</h3>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {bottomHistory.length === 0 ? (
-            <div className="col-span-full py-10 text-center text-slate-400 font-medium">
-              아직 비교할 수 있는 다른 세션 기록이 없습니다.
-            </div>
+            <div className="col-span-full py-10 text-center text-slate-400 font-medium">비교할 수 있는 다른 세션 기록이 없습니다.</div>
           ) : (
             bottomHistory.map((session, idx) => {
               const sessionDate = new Date(session.imm_date);
               const historyDateStr = `${sessionDate.getMonth() + 1}월 ${sessionDate.getDate()}일`;
 
               return (
-                <div
-                  key={idx}
-                  onClick={() => navigate(`/report/${session.imm_idx}`)}
-                  className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-indigo-200 hover:shadow-md hover:-translate-y-1 transition-all cursor-pointer group"
-                >
+                <div key={idx} onClick={() => navigate(`/report/${session.imm_idx}`)} className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-indigo-200 hover:shadow-md hover:-translate-y-1 transition-all cursor-pointer group">
                   <div className="flex justify-between items-center mb-3">
                     <span className="font-bold text-slate-700">{historyDateStr}</span>
-                    <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
-                      {session.imm_score}점
-                    </span>
+                    <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">{session.imm_score}점</span>
                   </div>
-                  <div className="text-sm text-slate-500 font-medium space-y-1.5 opacity-90 group-hover:opacity-100">
+                  <div className="text-sm text-slate-500 font-medium space-y-1.5">
                     <p className="flex justify-between"><span>시작 시간</span> <span className="text-slate-700">{session.start_time?.substring(0, 5)}</span></p>
                     <p className="flex justify-between"><span>자세 이탈</span> <span className="text-rose-500 font-bold">{session.pose_count}회</span></p>
                   </div>
@@ -415,7 +366,6 @@ export default function Report() {
           )}
         </div>
       </div>
-
     </div>
   );
 }

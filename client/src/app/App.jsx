@@ -4,6 +4,9 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 /* src/app 위치에서 한 단계 상위(src) 폴더의 App.css를 참조합니다. */
 import '../App.css';
 
+/* FSD shared/api 계층에서 구성한 인증 API 모듈을 호출합니다. */
+import { authApi } from '../shared/api';
+
 /* 각 계층으로 이동된 파일들의 상대 경로를 FSD 규격에 맞게 재설정했습니다. */
 import Logo from '../shared/ui/Logo';
 import Home from '../pages/Home';
@@ -22,14 +25,11 @@ export default function App() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const res = await fetch('http://localhost:3000/auth/check', {
-          method: 'GET',
-          credentials: 'include' 
-        });
-        const data = await res.json();
+        const data = await authApi.checkSession();
         
-        if (data.success && data.user_info) {
-          localStorage.setItem('user_info', JSON.stringify(data.user_info));
+        /* 백엔드 shared 규격 반영: data.user_info 대신 data.data.user로 접근합니다. */
+        if (data && data.success && data.data?.user) {
+          localStorage.setItem('user_info', JSON.stringify(data.data.user));
           setIsLoggedIn(true);
         } else {
           localStorage.removeItem('user_info');
@@ -47,7 +47,7 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:3000/user/logout', { method: 'POST', credentials: 'include' });
+      await authApi.logout();
       localStorage.removeItem('user_info');
       setIsLoggedIn(false);
       navigate('/');
@@ -58,9 +58,9 @@ export default function App() {
 
   if (isLoading) return null;
 
+  /* UI 및 렌더링 영역은 기존 디자인 및 라우팅 로직을 동일하게 유지했습니다. */
   return (
     <div className="min-h-screen">
-      {/* 프리미엄 다크 네이비 테마가 적용된 고정 헤더 영역입니다. */}
       <header className="px-8 py-5 flex justify-between items-center bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
         <div onClick={() => navigate('/')} className="cursor-pointer hover:opacity-80 transition-opacity">
           <Logo />

@@ -1,7 +1,14 @@
 import React from 'react';
-/* widgets 계층의 AuthLayout 컴포넌트를 참조하도록 경로를 수정했습니다. */
+
+/* FSD 아키텍처 규격에 맞춰 정의된 공통 인증 API 모듈을 임포트함 */
+import { authApi } from '../shared/api';
+
+/* widgets 계층의 AuthLayout 컴포넌트를 참조하도록 경로를 유지함 */
 import AuthLayout from '../widgets/AuthLayout';
 
+/**
+ * 사용자 로그인 기능을 담당하는 페이지 컴포넌트
+ */
 export default function Login({ onNavigate, setIsLoggedIn }) {
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -9,25 +16,18 @@ export default function Login({ onNavigate, setIsLoggedIn }) {
     const pwd = e.target.pwd.value;
 
     try {
-      const res = await fetch('http://localhost:3000/user/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, pwd })
-      });
-      const data = await res.json();
+      const data = await authApi.login({ email, pwd });
       
-      if (res.ok && data.success) {
-        if (data.user_info) {
-          localStorage.setItem('user_info', JSON.stringify(data.user_info));
-        }
+      /* 백엔드 shared 규격 동기화: data.user_info 대신 data.data.user로 파싱 구조 수정 */
+      if (data && data.success && data.data?.user) {
+        localStorage.setItem('user_info', JSON.stringify(data.data.user));
         setIsLoggedIn(true);
         onNavigate('dashboard');
       } else {
-        alert(data.message || "이메일 또는 비밀번호를 확인해주세요.");
+        alert(data?.message || "로그인 정보를 확인해주세요.");
       }
     } catch (err) {
-      console.error("로그인 에러:", err);
+      console.error("Login Error:", err.message);
       alert("서버 연결에 실패했습니다.");
     }
   };
@@ -36,6 +36,7 @@ export default function Login({ onNavigate, setIsLoggedIn }) {
     window.location.href = `http://localhost:3000/auth/${provider}`;
   };
 
+  /* UI 및 렌더링 영역은 기존 디자인 로직을 동일하게 유지함 */
   return (
     <AuthLayout title="로그인" subtitle="다시 오신 것을 환영합니다!">
       <form className="flex flex-col gap-5 mt-8" onSubmit={handleLogin}>

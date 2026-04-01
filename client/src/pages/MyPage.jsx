@@ -2,32 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './MyPage.css';
 
-// --- 공통 SVG 아이콘 컴포넌트 ---
+/* FSD 아키텍처 규격에 따른 공통 API 모듈 임포트 */
+import { immersionApi } from '../shared/api';
+
+/* --- 공통 SVG 아이콘 컴포넌트 --- */
 const UserIcon = () => <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
 const TargetIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>;
 const MedalIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2 2 4.4l2.2-.13a2 2 0 0 1 2.2-.13L15 7.21" /><path d="M11 12h2" /><path d="M12 11v2" /></svg>;
 const SettingsIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>;
 const RefreshIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>;
-// 💡 에러 원인 1: ListIcon 누락 해결
+/* 에러 원인 1: ListIcon 누락 해결 유지 */
 const ListIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
 
 export default function MyPage() {
   const navigate = useNavigate();
   const userInfoStr = localStorage.getItem('user_info');
   
-  // 상태 관리 세팅
   const [isLoading, setIsLoading] = useState(true);
   const [noiseThreshold, setNoiseThreshold] = useState(() => {
     return parseInt(localStorage.getItem('smart_focus_noise_db')) || 65;
   });
-  // 💡 에러 원인 2: pageData 상태 누락 해결
+  /* 에러 원인 2: pageData 상태 누락 해결 유지 */
   const [pageData, setPageData] = useState({
     stats: { total_time: "0시간 0분", avg_score: 0, bad_poses: 0, total_points: 0, total_sessions: 0, formatted_time: "0분", badge_count: 0 },
     history: [],
     recordedDays: []
   });
 
-  // 로컬스토리지에 정보 없으면 바로 로그인 페이지로 리디렉션
   useEffect(() => {
     if (!userInfoStr) {
       alert("로그인이 필요한 서비스입니다.");
@@ -35,37 +36,31 @@ export default function MyPage() {
     }
   }, [userInfoStr, navigate]);
 
-  // 렌더링 에러 방지용 빈 객체 (위 useEffect에서 어차피 튕겨냄)
   const userInfo = userInfoStr ? JSON.parse(userInfoStr) : { nick: '', email: '', points: 0, user_idx: 1 };
 
   useEffect(() => {
     localStorage.setItem('smart_focus_noise_db', noiseThreshold);
   }, [noiseThreshold]);
 
-  // DB 실데이터 Fetch (통계 & 히스토리 병렬 처리)
+  /* DB 실데이터 Fetch: immersionApi 모듈 사용으로 변경 */
   useEffect(() => {
     const fetchAllData = async () => {
-      // 튕겨나가는 중이면 굳이 페칭하지 않음
       if (!userInfoStr) return;
 
       try {
         setIsLoading(true);
         const { user_idx } = userInfo;
 
-        // Promise.all로 두 개의 엔드포인트를 동시에 찔러서 렌더링 지연 최소화
-        const [statsRes, historyRes] = await Promise.all([
-          fetch(`http://localhost:3000/api/mypage/stats/${user_idx}`, { credentials: 'include' }),
-          fetch(`http://localhost:3000/api/mypage/history/${user_idx}`, { credentials: 'include' })
+        /* fetch에서 공통 apiClient를 사용하는 구조로 변경됨 */
+        const [statsResult, historyResult] = await Promise.all([
+          immersionApi.getStats(user_idx),
+          immersionApi.getHistory(user_idx)
         ]);
-
-        const statsResult = await statsRes.json();
-        const historyResult = await historyRes.json();
 
         if (statsResult.success && historyResult.success) {
           const stats = statsResult.data;
           const history = historyResult.data;
 
-          // 히스토리 날짜 데이터에서 캘린더 렌더링을 위한 '일(Day)'만 추출 후 중복 제거
           const days = [...new Set(history.map(item => {
             const dateObj = new Date(item.imm_date);
             return dateObj.getDate();
@@ -87,9 +82,8 @@ export default function MyPage() {
     };
 
     fetchAllData();
-  }, [userInfoStr]); // userInfoStr 변경 시 (로그아웃 등) 재호출
+  }, [userInfoStr]);
 
-  // 캘린더 렌더링용 변수 세팅
   const todayDate = new Date().getDate();
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
@@ -99,7 +93,6 @@ export default function MyPage() {
     alert("바른 자세 기준점을 초기화합니다. 3초간 정면을 응시해 주세요!");
   };
 
-  // 데이터 조회 중 스켈레톤/스피너 UI
   if (isLoading) {
     return (
       <div className="min-h-[85vh] flex flex-col items-center justify-center gap-4">
@@ -109,10 +102,8 @@ export default function MyPage() {
     );
   }
 
-  // 구조 분해 할당으로 가독성 확보
   const { stats, history, recordedDays } = pageData;
 
-  // 통계 기반 진척도 계산 (Max 100%)
   const avgScoreGoal = Math.min(100, Math.round(((stats?.avg_score || 0) / 90) * 100));
   const sessionGoal = Math.min(100, Math.round(((stats?.total_sessions || 0) / 10) * 100));
 
@@ -124,8 +115,6 @@ export default function MyPage() {
       </header>
 
       <div className="grid-layout">
-
-        {/* ================= 프로필 & 누적 포인트 ================= */}
         <div className="premium-card profile-card">
           <div className="profile-left">
             <div className="profile-avatar"><UserIcon /></div>
@@ -142,7 +131,6 @@ export default function MyPage() {
           </div>
         </div>
 
-        {/* ================= 캘린더 영역 ================= */}
         <div className="premium-card calendar-card">
           <div className="calendar-top-nav">
             <h3 className="calendar-month-title">{currentYear}년 {currentMonth}월의 몰입 기록</h3>
@@ -171,7 +159,6 @@ export default function MyPage() {
                   </div>
                 );
               })}
-              {/* 그리드 정렬용 빈칸 보정 */}
               <div className="calendar-day"></div>
               <div className="calendar-day"></div>
               <div className="calendar-day"></div>
@@ -180,7 +167,6 @@ export default function MyPage() {
           </div>
         </div>
 
-        {/* ================= 목표 달성률 (DB 연동) ================= */}
         <div className="premium-card goals-card">
           <div className="card-header">
             <div className="card-icon-wrapper"><TargetIcon /></div>
@@ -208,7 +194,6 @@ export default function MyPage() {
           </div>
         </div>
 
-        {/* ================= 종합 누적 기록 ================= */}
         <div className="premium-card badges-card">
           <div className="card-header">
             <div className="card-icon-wrapper"><MedalIcon /></div>
@@ -232,7 +217,6 @@ export default function MyPage() {
           </div>
         </div>
 
-        {/* ================= 최근 세션 기록 목록 ================= */}
         <div className="premium-card recent-sessions-card">
           <div className="card-header">
             <div className="card-icon-wrapper"><ListIcon /></div>
@@ -240,7 +224,6 @@ export default function MyPage() {
           </div>
           <div className="session-list">
             {history.length === 0 ? (
-              // Empty State UI 적용
               <div className="empty-state">
                 <div className="empty-emoji">🌱</div>
                 <p className="empty-title">아직 몰입 기록이 없어요</p>
@@ -269,14 +252,12 @@ export default function MyPage() {
           </div>
         </div>
 
-        {/* ================= 엔진 환경 설정 ================= */}
         <div className="premium-card settings-card">
           <div className="card-header">
             <div className="card-icon-wrapper"><SettingsIcon /></div>
             <h3 className="card-title">환경 설정</h3>
           </div>
           <div className="settings-content">
-
             <div>
               <div className="settings-label-row">
                 <span className="settings-label">소음 경고 데시벨 기준치</span>
@@ -292,7 +273,6 @@ export default function MyPage() {
                 <span>시끄러움 (90dB)</span>
               </div>
             </div>
-
             <div>
               <div className="settings-label-row" style={{ marginBottom: '16px' }}>
                 <span className="settings-label">자세 영점 조절</span>
@@ -302,10 +282,8 @@ export default function MyPage() {
                 바른 자세 기준 재설정하기
               </button>
             </div>
-
           </div>
         </div>
-
       </div>
     </div>
   );
