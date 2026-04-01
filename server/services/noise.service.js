@@ -1,5 +1,7 @@
-// services/noise.service.js
 const db = require('../config/database');
+
+const DEFAULT_NOISE_OBJECT_NAME = 'ambient';
+const DEFAULT_NOISE_RELIABILITY = 1;
 
 async function saveNoiseIfNeeded({
   immersionId,
@@ -8,7 +10,7 @@ async function saveNoiseIfNeeded({
   lastNoiseSavedAtMs,
   noiseSaveIntervalMs,
 }) {
-  if (!immersionId) {
+  if (immersionId === undefined || immersionId === null) {
     return {
       saved: false,
       nextNoiseSavedAtMs: lastNoiseSavedAtMs,
@@ -16,11 +18,11 @@ async function saveNoiseIfNeeded({
     };
   }
 
-  if (noiseLevelDb === undefined || noiseLevelDb === null) {
+  if (typeof noiseLevelDb !== 'number' || Number.isNaN(noiseLevelDb)) {
     return {
       saved: false,
       nextNoiseSavedAtMs: lastNoiseSavedAtMs,
-      reason: 'NOISE_VALUE_MISSING',
+      reason: 'INVALID_NOISE_VALUE',
     };
   }
 
@@ -37,7 +39,12 @@ async function saveNoiseIfNeeded({
       INSERT INTO noises (imm_idx, decibel, obj_name, reliability, is_summary, detected_at)
       VALUES (?, ?, ?, ?, 0, NOW())
     `,
-    [immersionId, noiseLevelDb, 'ambient', 1]
+    [
+      immersionId,
+      noiseLevelDb,
+      DEFAULT_NOISE_OBJECT_NAME,
+      DEFAULT_NOISE_RELIABILITY,
+    ]
   );
 
   return {

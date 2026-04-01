@@ -8,11 +8,11 @@ function sendSuccess(
   code = RESPONSE_CODES.SUCCESS
 ) {
   return res.status(status).json({
-  success: true,
-  message,
-  code,
-  data,
-});
+    success: true,
+    message,
+    code,
+    data,
+  });
 }
 
 function sendFail(
@@ -25,7 +25,6 @@ function sendFail(
     success: false,
     message,
     code,
-    error,
     timestamp: new Date().toISOString(),
   });
 }

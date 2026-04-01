@@ -99,17 +99,38 @@ async function login(req, res, next) {
   const { email, pwd } = req.body;
 
   if (!isValidEmail(email) || !isNonEmptyString(pwd)) {
-    return sendFail(res, 400, '이메일과 비밀번호를 올바르게 입력해주세요.', RESPONSE_CODES.INVALID_INPUT);
+    return sendFail(
+      res,
+      400,
+      '이메일과 비밀번호를 올바르게 입력해주세요.',
+      RESPONSE_CODES.INVALID_INPUT
+    );
   }
 
   try {
     const user = await authService.login({ email, pwd });
-    req.session.user = user;
 
-    return sendSuccess(res, `${user.nick}님 환영합니다!`, { user });
+    req.login(user, (err) => {
+      if (err) {
+        return next(err);
+      }
+
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          return next(saveErr);
+        }
+
+        return sendSuccess(res, `${user.nick}님 환영합니다!`, { user });
+      });
+    });
   } catch (error) {
     if (error.message === RESPONSE_CODES.LOGIN_FAILED) {
-      return sendFail(res, 401, '이메일 또는 비밀번호가 일치하지 않습니다.', RESPONSE_CODES.LOGIN_FAILED);
+      return sendFail(
+        res,
+        401,
+        '이메일 또는 비밀번호가 일치하지 않습니다.',
+        RESPONSE_CODES.LOGIN_FAILED
+      );
     }
 
     return next(error);
@@ -117,35 +138,49 @@ async function login(req, res, next) {
 }
 
 function logout(req, res, next) {
-  req.session.destroy((error) => {
-    if (error) {
-      return next(error);
+  req.logout((logoutErr) => {
+    if (logoutErr) {
+      return next(logoutErr);
     }
 
-    res.clearCookie('connect.sid');
-    return sendSuccess(res, '로그아웃되었습니다.');
+    req.session.destroy((sessionErr) => {
+      if (sessionErr) {
+        return next(sessionErr);
+      }
+
+      res.clearCookie('connect.sid');
+      return sendSuccess(res, '로그아웃되었습니다.');
+    });
   });
 }
 
 function getSession(req, res) {
-  return sendSuccess(res, '세션이 유효합니다.', { user: req.session.user });
+  if (!req.user) {
+    return sendFail(
+      res,
+      401,
+      '로그인 정보가 없습니다. 다시 로그인 해주세요.',
+      RESPONSE_CODES.UNAUTHORIZED || 'UNAUTHORIZED'
+    );
+  }
+
+  return sendSuccess(res, '세션이 유효합니다.', { user: req.user });
 }
 
-function googleCallback(req, res) {
+function googleCallback(req, res, next) {
   const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 
   if (!req.user) {
     return res.redirect(`${clientUrl}/login`);
   }
 
-  req.session.user = {
-    user_idx: req.user.user_idx,
-    email: req.user.email,
-    nick: req.user.nick,
-    provider: req.user.provider,
-  };
+  req.session.save((err) => {
+    if (err) {
+      return next(err);
+    }
 
-  return res.redirect(`${clientUrl}/dashboard`);
+    return res.redirect(`${clientUrl}/dashboard`);
+  });
 }
 
 module.exports = {
