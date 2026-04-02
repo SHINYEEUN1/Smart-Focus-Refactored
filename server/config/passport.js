@@ -1,6 +1,7 @@
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const authService = require('../services/auth.service');
+const { AUTH_PROVIDERS } = require('../../shared');
 
 function configurePassport() {
   passport.serializeUser((user, done) => {
@@ -10,7 +11,7 @@ function configurePassport() {
   passport.deserializeUser(async (userIdx, done) => {
     try {
       const user = await authService.findUserById(userIdx);
-      return done(null, user);
+      return done(null, user || false);
     } catch (error) {
       console.error('[DESERIALIZE USER ERROR]', error);
       return done(error);
@@ -26,19 +27,16 @@ function configurePassport() {
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
-          const email = profile?.emails?.[0]?.value;
+          const email = profile?.emails?.[0]?.value || null;
           const snsId = profile?.id;
           const nick = profile?.displayName || 'google_user';
 
-          if (!email) {
-            return done(new Error('구글 계정 이메일 정보를 가져오지 못했습니다.'));
-          }
-
-          let user = await authService.findGoogleUserByEmail(email);
-
-          if (!user) {
-            user = await authService.createGoogleUser({ email, nick, snsId });
-          }
+          const user = await authService.findOrCreateOAuthUser({
+            provider: AUTH_PROVIDERS.GOOGLE,
+            email,
+            nick,
+            snsId,
+          });
 
           return done(null, user);
         } catch (error) {

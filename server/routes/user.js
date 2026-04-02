@@ -27,4 +27,10 @@ router.get(
   authController.googleCallback
 );
 
+router.get('/kakao', authController.redirectKakao);
+router.get('/kakao/callback', authController.kakaoCallback);
+
+router.get('/naver', authController.redirectNaver);
+router.get('/naver/callback', authController.naverCallback);
+
 module.exports = router;

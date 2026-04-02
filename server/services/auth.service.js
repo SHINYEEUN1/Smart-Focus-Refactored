@@ -1,6 +1,7 @@
 const pool = require('../config/database');
 const bcrypt = require('bcrypt');
 const emailAuthService = require('./email-auth.service');
+const { AUTH_PROVIDERS } = require('../../shared');
 
 const SALT_ROUNDS = 10;
 
@@ -41,7 +42,7 @@ async function join({ email, pwd, nick }) {
 
   await pool.query(
     'INSERT INTO users (email, pwd, nick, provider, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
-    [normalizedEmail, hashedPassword, trimmedNick, 'local']
+    [normalizedEmail, hashedPassword, trimmedNick, AUTH_PROVIDERS.LOCAL]
   );
 }
 
@@ -65,9 +66,9 @@ async function login({ email, pwd }) {
     `SELECT
       user_idx, email, pwd, nick, provider, sns_id, created_at
       FROM users
-      WHERE email = ? AND (provider = 'local' OR provider IS NULL)
+      WHERE email = ? AND (provider = ? OR provider IS NULL)
     `,
-    [normalizedEmail]
+    [normalizedEmail, AUTH_PROVIDERS.LOCAL]
   );
 
   if (users.length === 0) {
@@ -98,34 +99,86 @@ async function findUserById(userId) {
   return rows[0] || null;
 }
 
-async function findGoogleUserByEmail(email) {
-  const normalizedEmail = email.trim().toLowerCase();
+async function findOAuthUser({ provider, snsId, email }) {
+  if (provider && snsId) {
+    const [snsRows] = await pool.query(
+      `SELECT user_idx, email, nick, provider, sns_id, created_at
+       FROM users
+       WHERE provider = ? AND sns_id = ?`,
+      [provider, String(snsId)]
+    );
 
-  const [rows] = await pool.query(
-    `SELECT
-      user_idx, email, nick, provider, sns_id, created_at
-      FROM users
-      WHERE email = ? AND provider = 'google'
-    `,
-    [normalizedEmail]
-  );
+    if (snsRows[0]) {
+      return snsRows[0];
+    }
+  }
 
-  return rows[0] || null;
+  if (email) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const [emailRows] = await pool.query(
+      `SELECT user_idx, email, nick, provider, sns_id, created_at
+       FROM users
+       WHERE email = ?`,
+      [normalizedEmail]
+    );
+
+    if (emailRows[0]) {
+      return emailRows[0];
+    }
+  }
+
+  return null;
 }
 
-async function createGoogleUser({ email, nick, snsId }) {
-  const normalizedEmail = email.trim().toLowerCase();
-  const trimmedNick = nick.trim();
+async function createOAuthUser({ provider, email, nick, snsId }) {
+  const normalizedEmail = email ? email.trim().toLowerCase() : null;
+  const trimmedNick = nick?.trim() || `${provider}_user`;
+
+  // 소셜 로그인 계정용 더미 비밀번호
+  const dummyPassword = await bcrypt.hash(
+    `${provider}_${snsId}_${Date.now()}`,
+    SALT_ROUNDS
+  );
 
   const [result] = await pool.query(
     `
-      INSERT INTO users (email, nick, provider, sns_id, created_at)
-      VALUES (?, ?, 'google', ?, CURRENT_TIMESTAMP)
+      INSERT INTO users (email, pwd, nick, provider, sns_id, created_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `,
-    [normalizedEmail, trimmedNick, snsId]
+    [normalizedEmail, dummyPassword, trimmedNick, provider, String(snsId)]
   );
 
   return findUserById(result.insertId);
+}
+
+async function findOrCreateOAuthUser({ provider, email, nick, snsId }) {
+  let user = await findOAuthUser({ provider, snsId, email });
+
+  if (!user) {
+    user = await createOAuthUser({ provider, email, nick, snsId });
+  }
+
+  return user;
+}
+
+// 기존 코드 호환용
+async function findGoogleUserByEmail(email) {
+  return findOAuthUser({
+    provider: AUTH_PROVIDERS.GOOGLE,
+    email,
+    snsId: null,
+  });
+}
+
+// 기존 코드 호환용
+async function createGoogleUser({ email, nick, snsId }) {
+  return createOAuthUser({
+    provider: AUTH_PROVIDERS.GOOGLE,
+    email,
+    nick,
+    snsId,
+  });
 }
 
 module.exports = {
@@ -133,6 +186,9 @@ module.exports = {
   checkNickAvailable,
   login,
   findUserById,
+  findOAuthUser,
+  createOAuthUser,
+  findOrCreateOAuthUser,
   findGoogleUserByEmail,
   createGoogleUser,
   AUTH_ERROR,
