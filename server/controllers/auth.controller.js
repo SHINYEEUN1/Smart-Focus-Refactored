@@ -1,8 +1,38 @@
+const crypto = require('crypto');
+
 const authService = require('../services/auth.service');
 const emailAuthService = require('../services/email-auth.service');
 const { sendSuccess, sendFail } = require('../utils/response');
 const { isValidEmail, isNonEmptyString } = require('../utils/validators');
-const { RESPONSE_CODES } = require('../../shared/constants/response-codes');
+const { RESPONSE_CODES, AUTH_PROVIDERS } = require('../../shared');
+
+function getClientUrl() {
+  return process.env.CLIENT_URL || 'http://localhost:5173';
+}
+
+function redirectToLogin(res) {
+  return res.redirect(`${getClientUrl()}/login`);
+}
+
+function redirectToDashboard(res) {
+  return res.redirect(`${getClientUrl()}/dashboard`);
+}
+
+function finishOAuthLogin(req, res, next, user) {
+  req.login(user, (loginErr) => {
+    if (loginErr) {
+      return next(loginErr);
+    }
+
+    req.session.save((saveErr) => {
+      if (saveErr) {
+        return next(saveErr);
+      }
+
+      return redirectToDashboard(res);
+    });
+  });
+}
 
 async function sendEmailCode(req, res) {
   const { email } = req.body;
@@ -80,7 +110,7 @@ async function checkNick(req, res) {
   const { nick } = req.body;
 
   if (!isNonEmptyString(nick)) {
-    return sendFail(res, 400, '닉네임을 입력해주세요.', 'INVALID_NICK');
+    return sendFail(res, 400, '닉네임을 입력해주세요.', RESPONSE_CODES.INVALID_NICK);
   }
 
   try {
@@ -160,7 +190,7 @@ function getSession(req, res) {
       res,
       401,
       '로그인 정보가 없습니다. 다시 로그인 해주세요.',
-      RESPONSE_CODES.UNAUTHORIZED || 'UNAUTHORIZED'
+      RESPONSE_CODES.UNAUTHORIZED
     );
   }
 
@@ -168,10 +198,8 @@ function getSession(req, res) {
 }
 
 function googleCallback(req, res, next) {
-  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-
   if (!req.user) {
-    return res.redirect(`${clientUrl}/login`);
+    return redirectToLogin(res);
   }
 
   req.session.save((err) => {
@@ -179,8 +207,165 @@ function googleCallback(req, res, next) {
       return next(err);
     }
 
-    return res.redirect(`${clientUrl}/dashboard`);
+    return redirectToDashboard(res);
   });
+}
+
+function redirectKakao(req, res) {
+  const redirectUri = encodeURIComponent(process.env.KAKAO_CALLBACK_URL);
+  const clientId = process.env.KAKAO_CLIENT_ID;
+
+  const url =
+    `https://kauth.kakao.com/oauth/authorize` +
+    `?client_id=${clientId}` +
+    `&redirect_uri=${redirectUri}` +
+    `&response_type=code`;
+
+  return res.redirect(url);
+}
+
+async function kakaoCallback(req, res, next) {
+  const { code } = req.query;
+
+  if (!code) {
+    return redirectToLogin(res);
+  }
+
+  try {
+    const tokenRes = await fetch('https://kauth.kakao.com/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: process.env.KAKAO_CLIENT_ID,
+        client_secret: process.env.KAKAO_CLIENT_SECRET || '',
+        redirect_uri: process.env.KAKAO_CALLBACK_URL,
+        code,
+      }),
+    });
+
+    const tokenData = await tokenRes.json();
+
+    if (!tokenRes.ok || !tokenData.access_token) {
+      console.error('[KAKAO TOKEN ERROR]', tokenData);
+      return redirectToLogin(res);
+    }
+
+    const profileRes = await fetch('https://kapi.kakao.com/v2/user/me', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+        'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+      },
+    });
+
+    const profileData = await profileRes.json();
+
+    if (!profileRes.ok || !profileData?.id) {
+      console.error('[KAKAO PROFILE ERROR]', profileData);
+      return redirectToLogin(res);
+    }
+
+    const snsId = String(profileData.id);
+    const email = profileData.kakao_account?.email || null;
+    const nick = profileData.kakao_account?.profile?.nickname || 'kakao_user';
+
+    const user = await authService.findOrCreateOAuthUser({
+      provider: AUTH_PROVIDERS.KAKAO,
+      email,
+      nick,
+      snsId,
+    });
+
+    return finishOAuthLogin(req, res, next, user);
+  } catch (error) {
+    console.error('[KAKAO CALLBACK ERROR]', error);
+    return next(error);
+  }
+}
+
+function redirectNaver(req, res, next) {
+  const state = crypto.randomBytes(16).toString('hex');
+
+  req.session.oauthState = state;
+
+  req.session.save((err) => {
+    if (err) {
+      return next(err);
+    }
+
+    const redirectUri = encodeURIComponent(process.env.NAVER_CALLBACK_URL);
+    const clientId = process.env.NAVER_CLIENT_ID;
+
+    const url =
+      `https://nid.naver.com/oauth2.0/authorize` +
+      `?response_type=code` +
+      `&client_id=${clientId}` +
+      `&redirect_uri=${redirectUri}` +
+      `&state=${state}`;
+
+    return res.redirect(url);
+  });
+}
+
+async function naverCallback(req, res, next) {
+  const { code, state } = req.query;
+
+  if (!code || !state || state !== req.session.oauthState) {
+    return redirectToLogin(res);
+  }
+
+  try {
+    const tokenUrl =
+      `https://nid.naver.com/oauth2.0/token?grant_type=authorization_code` +
+      `&client_id=${encodeURIComponent(process.env.NAVER_CLIENT_ID)}` +
+      `&client_secret=${encodeURIComponent(process.env.NAVER_CLIENT_SECRET)}` +
+      `&code=${encodeURIComponent(code)}` +
+      `&state=${encodeURIComponent(state)}`;
+
+    const tokenRes = await fetch(tokenUrl, { method: 'GET' });
+    const tokenData = await tokenRes.json();
+
+    if (!tokenRes.ok || !tokenData.access_token) {
+      console.error('[NAVER TOKEN ERROR]', tokenData);
+      return redirectToLogin(res);
+    }
+
+    const profileRes = await fetch('https://openapi.naver.com/v1/nid/me', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+      },
+    });
+
+    const profileData = await profileRes.json();
+    const profile = profileData?.response;
+
+    if (!profileRes.ok || !profile?.id) {
+      console.error('[NAVER PROFILE ERROR]', profileData);
+      return redirectToLogin(res);
+    }
+
+    const snsId = String(profile.id);
+    const email = profile.email || null;
+    const nick = profile.nickname || profile.name || 'naver_user';
+
+    const user = await authService.findOrCreateOAuthUser({
+      provider: AUTH_PROVIDERS.NAVER,
+      email,
+      nick,
+      snsId,
+    });
+
+    delete req.session.oauthState;
+
+    return finishOAuthLogin(req, res, next, user);
+  } catch (error) {
+    console.error('[NAVER CALLBACK ERROR]', error);
+    return next(error);
+  }
 }
 
 module.exports = {
@@ -192,4 +377,8 @@ module.exports = {
   logout,
   getSession,
   googleCallback,
+  redirectKakao,
+  kakaoCallback,
+  redirectNaver,
+  naverCallback,
 };
