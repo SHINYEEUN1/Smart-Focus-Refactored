@@ -15,9 +15,6 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 
 /* --- 공통 데이터 매핑 상수 정의 --- */
 
-/**
- * 백엔드 소음 식별자를 사용자용 한국어 명칭으로 매핑합니다.
- */
 const NOISE_LABEL_MAP = {
   'ambient': '주변 소음',
   'speech': '대화 소음',
@@ -27,9 +24,6 @@ const NOISE_LABEL_MAP = {
   'none': '없음'
 };
 
-/**
- * 자세 상태 코드를 직관적인 한국어 명칭 및 시각적 스타일로 매핑합니다.
- */
 const POSE_DETAIL_MAP = {
   'TILTED_WARNING': { label: '고개 기울임 위험', color: 'text-rose-600', bg: 'bg-rose-50' },
   'TILTED_CAUTION': { label: '고개 기울임 주의', color: 'text-amber-600', bg: 'bg-amber-50' },
@@ -55,7 +49,7 @@ const AiBrainApiIcon = () => (
 );
 
 /**
- * 몰입 분석 리포트 페이지 컴포넌트
+ * 집중 분석 리포트 페이지 컴포넌트
  */
 export default function Report() {
   const navigate = useNavigate();
@@ -155,9 +149,6 @@ export default function Report() {
     fetchAllData();
   }, [imm_idx, navigate, isDetailsMode]);
 
-  /**
-   * 리포트 화면을 캡처하여 최적화된 파일명으로 PDF 저장합니다.
-   */
   const handleExportPDF = async () => {
     if (!reportRef.current || !reportData) return;
 
@@ -188,7 +179,7 @@ export default function Report() {
         const dateStr = d.toISOString().split('T')[0].replace(/-/g, '');
         const timeStr = reportData.summary.time.replace(/:/g, '').substring(0, 4);
         
-        const fileName = `[몰입리포트]_${userName}_${dateStr}_${timeStr}.pdf`;
+        const fileName = `[집중리포트]_${userName}_${dateStr}_${timeStr}.pdf`;
 
         pdf.save(fileName);
       } catch (err) {
@@ -199,11 +190,10 @@ export default function Report() {
     }, 500);
   };
 
-  /* 로딩 중일 때는 아무것도 렌더링하지 않거나 스피너 표시 */
   if (isLoading) {
     return (
       <div className="min-h-[85vh] flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-4 border-[#5B44F2] border-t-transparent rounded-full animate-spin"></div>
         <p className="text-slate-500 font-bold tracking-widest animate-pulse">데이터를 불러오는 중...</p>
       </div>
     );
@@ -212,23 +202,23 @@ export default function Report() {
   /* 목록 모드 UI 렌더링 */
   if (!isDetailsMode) {
     return (
-      <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans">
+      <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans animate-fade-in">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-10 pb-6 border-b border-slate-200/60 gap-4 md:gap-0">
           <div>
             <h2 className="text-2xl md:text-3xl font-black tracking-tighter text-slate-900 mb-1">분석 리포트 보관함</h2>
-            <p className="text-sm md:text-base text-slate-500 font-medium">과거에 측정했던 몰입 세션 기록들을 확인하고 비교해보세요.</p>
+            <p className="text-sm md:text-base text-slate-500 font-medium">과거에 측정했던 집중 세션 기록들을 확인하고 비교해보세요.</p>
           </div>
-          <div className="px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-xs md:text-sm font-bold text-indigo-700">
-            📊 총 {fullHistory.length}개의 몰입 데이터
+          <div className="px-4 py-2.5 bg-[#5B44F2]/10 border border-[#5B44F2]/20 rounded-xl text-xs md:text-sm font-bold text-[#5B44F2]">
+            📊 총 {fullHistory.length}개의 집중 데이터
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {fullHistory.map((session, idx) => (
-            <div key={idx} onClick={() => navigate(`/report/${session.imm_idx}`)} className="p-6 rounded-3xl border border-slate-100 bg-white hover:border-indigo-200 hover:shadow-lg transition-all cursor-pointer group shadow-sm">
+            <div key={idx} onClick={() => navigate(`/report/${session.imm_idx}`)} className="p-6 rounded-3xl border border-slate-100 bg-white hover:border-[#5B44F2]/30 hover:shadow-lg transition-all cursor-pointer group shadow-sm">
               <div className="flex justify-between items-center mb-5">
                 <span className="font-extrabold text-slate-700 text-lg">{new Date(session.imm_date).toLocaleDateString()}</span>
-                <span className="text-sm font-black text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">{session.imm_score}점</span>
+                <span className="text-sm font-black text-[#5B44F2] bg-[#5B44F2]/10 px-3 py-1.5 rounded-xl border border-[#5B44F2]/20">{session.imm_score}점</span>
               </div>
               <div className="text-sm text-slate-500 font-medium space-y-2 mt-auto">
                 <p className="flex justify-between border-b border-slate-100 pb-2"><span>시작 시간</span> <span className="text-slate-900 font-semibold">{session.start_time?.substring(0, 5)}</span></p>
@@ -242,7 +232,6 @@ export default function Report() {
     );
   }
 
-  /* --- 상세 모드 가드 클로즈: reportData가 없으면 에러 방지를 위해 리턴 --- */
   if (!reportData) return null;
 
   /* 차트 옵션 설정 */
@@ -254,7 +243,7 @@ export default function Report() {
     },
     layout: { padding: { left: 10, right: 10, top: 30, bottom: 10 } },
     scales: {
-      y: { type: 'linear', position: 'left', beginAtZero: true, max: 110, grid: { color: 'rgba(241, 245, 249, 0.5)', drawBorder: false }, ticks: { callback: (v) => v <= 100 ? v + '%' : '', color: '#6366f1', font: { weight: 'bold' } } },
+      y: { type: 'linear', position: 'left', beginAtZero: true, max: 110, grid: { color: 'rgba(241, 245, 249, 0.5)', drawBorder: false }, ticks: { callback: (v) => v <= 100 ? v + '%' : '', color: '#5B44F2', font: { weight: 'bold' } } },
       y1: { type: 'linear', position: 'right', beginAtZero: true, suggestedMax: 120, grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + 'dB', color: '#94a3b8' } },
       x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 11 }, maxTicksLimit: 10 } }
     },
@@ -264,22 +253,16 @@ export default function Report() {
   const lineData = {
     labels: reportData.chart.labels,
     datasets: [
-      { label: '몰입 에너지', data: reportData.chart.scores, borderColor: '#5B44F2', backgroundColor: 'rgba(91, 68, 242, 0.06)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0, yAxisID: 'y' },
+      { label: '집중 에너지', data: reportData.chart.scores, borderColor: '#5B44F2', backgroundColor: 'rgba(91, 68, 242, 0.06)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0, yAxisID: 'y' },
       { label: '주변 소음', data: reportData.chart.noises, borderColor: 'rgba(148, 163, 184, 0.6)', borderWidth: 1.5, borderDash: [4, 4], tension: 0.4, pointRadius: 0, yAxisID: 'y1' }
     ]
   };
 
-  let formattedDetailDate = '날짜 정보 없음';
-  if (reportData.summary.date) {
-    const d = new Date(reportData.summary.date);
-    formattedDetailDate = `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, '0')}. ${String(d.getDate()).padStart(2, '0')}`;
-  }
-
   return (
-    <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans" ref={reportRef}>
+    <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans animate-fade-in" ref={reportRef}>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-10 pb-6 border-b border-slate-200/60 gap-4 md:gap-0">
         <div>
-          <button onClick={() => navigate('/report')} className="text-sm font-bold text-indigo-600 mb-2.5 flex items-center gap-1.5 group pdf-exclude">
+          <button onClick={() => navigate('/report')} className="text-sm font-bold text-[#5B44F2] mb-2.5 flex items-center gap-1.5 group pdf-exclude">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transform transition-transform group-hover:-translate-x-1"><path d="m15 18-6-6 6-6"/></svg> 보관함으로 돌아가기
           </button>
           <h2 className="text-2xl md:text-3xl font-black tracking-tighter text-slate-900 mb-1">종합 분석 리포트</h2>
@@ -292,12 +275,12 @@ export default function Report() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
         {[
-          { label: '총 집중 시간', value: reportData.summary.time, unit: '', icon: '⏱️', color: 'text-indigo-600', bg: 'bg-indigo-50' },
-          { label: '평균 몰입도', value: reportData.summary.score, unit: '점', icon: '⚡', color: 'text-emerald-500', bg: 'bg-emerald-50' },
+          { label: '총 집중 시간', value: reportData.summary.time, unit: '', icon: '⏱️', color: 'text-[#5B44F2]', bg: 'bg-[#5B44F2]/10' },
+          { label: '평균 집중도', value: reportData.summary.score, unit: '점', icon: '⚡', color: 'text-emerald-500', bg: 'bg-emerald-50' },
           { label: '자세 경고 횟수', value: reportData.summary.warnings, unit: '회', icon: '🚨', color: 'text-rose-500', bg: 'bg-rose-50' },
           { label: '주요 방해 소음', value: reportData.summary.mainNoise, unit: '', icon: '🎧', color: 'text-amber-500', bg: 'bg-amber-50' }
         ].map((item, idx) => (
-          <div key={idx} className="bg-white p-5 md:p-7 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 md:gap-5 transition-all hover:shadow-md">
+          <div key={idx} className="bg-white p-5 md:p-7 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 md:gap-5 transition-all hover:shadow-md hover:-translate-y-1">
             <div className={`w-12 h-12 md:w-14 md:h-14 min-w-[48px] rounded-full flex items-center justify-center text-xl md:text-2xl ${item.bg} ${item.color}`}>{item.icon}</div>
             <div className="overflow-hidden">
               <p className="text-xs md:text-sm font-semibold text-slate-400 mb-1">{item.label}</p>
@@ -309,22 +292,22 @@ export default function Report() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
         <div className="lg:col-span-8">
-          <div className="h-full bg-indigo-600 text-white p-6 md:p-8 rounded-3xl shadow-xl shadow-indigo-100 relative overflow-hidden">
+          <div className="h-full bg-[#5B44F2] text-white p-6 md:p-8 rounded-3xl shadow-xl shadow-[#5B44F2]/20 relative overflow-hidden">
             <div className="relative z-10 flex flex-col md:flex-row items-center gap-6">
-              <div className="w-20 h-20 md:w-24 md:h-24 bg-indigo-500/50 rounded-3xl flex items-center justify-center border border-indigo-400/30"><AiBrainApiIcon /></div>
+              <div className="w-20 h-20 md:w-24 md:h-24 bg-white/10 rounded-3xl flex items-center justify-center border border-white/20"><AiBrainApiIcon /></div>
               <div className="text-center md:text-left flex-1">
-                <h3 className="text-indigo-200 text-xs font-black uppercase tracking-widest mb-2">AI 몰입 분석 피드백</h3>
+                <h3 className="text-indigo-200 text-xs font-black uppercase tracking-widest mb-2">AI 집중 분석 피드백</h3>
                 <p className="text-lg md:text-xl font-bold leading-relaxed break-keep">"{reportData.summary.aiFeedback}"</p>
               </div>
             </div>
           </div>
         </div>
         <div className="lg:col-span-4">
-          <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-100 shadow-sm h-full">
+          <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-100 shadow-sm h-full hover:shadow-md transition-all">
             <h3 className="text-base font-bold text-slate-900 mb-5 flex items-center gap-2"><span className="w-1.5 h-4 bg-rose-500 rounded-full"></span>자세 정밀 분석</h3>
             <div className="space-y-3">
               {reportData.summary.poseBreakdown.length > 0 ? reportData.summary.poseBreakdown.map((pose, i) => (
-                <div key={i} className={`flex justify-between items-center p-4 rounded-2xl ${pose.bg} border border-white/50`}>
+                <div key={i} className={`flex justify-between items-center p-4 rounded-2xl ${pose.bg} border border-slate-50`}>
                   <span className={`font-bold ${pose.color}`}>{pose.label}</span>
                   <span className="text-slate-900 font-black">{pose.count}<span className="text-xs text-slate-400 font-bold ml-0.5">회</span></span>
                 </div>
@@ -334,11 +317,11 @@ export default function Report() {
         </div>
       </div>
 
-      <div className="bg-white p-6 md:p-10 rounded-3xl border border-slate-100 shadow-sm mb-8">
+      <div className="bg-white p-6 md:p-10 rounded-3xl border border-slate-100 shadow-sm mb-8 hover:shadow-md transition-all">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 md:mb-10 px-2 gap-3 sm:gap-0">
-          <h3 className="text-base md:text-lg font-bold text-slate-900 tracking-tight">시간대별 몰입 트렌드 및 소음도 분석</h3>
+          <h3 className="text-base md:text-lg font-bold text-slate-900 tracking-tight">시간대별 집중 트렌드 및 소음도 분석</h3>
           <div className="flex gap-4 text-xs font-semibold text-slate-500 pdf-exclude">
-            <div className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-[#5B44F2]"></span> 몰입 에너지(좌)</div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-[#5B44F2]"></span> 집중 에너지(좌)</div>
             <div className="flex items-center gap-1.5"><span className="w-3 h-0.5 border-b border-dashed border-slate-400"></span> 주변 소음(우)</div>
           </div>
         </div>

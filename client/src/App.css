@@ -8,20 +8,25 @@
   body {
     margin: 0;
     padding: 0;
-    /* 프리미엄 메쉬 그라데이션 배경을 전역에 적용합니다. */
+    /* 프리미엄 메쉬 그라데이션 배경 (라이트 모드 원본 유지) */
     background: radial-gradient(circle at 0% 0%, #f1f5f9 0%, #e2e8f0 100%) !important;
     background-attachment: fixed !important;
     min-height: 100vh;
     font-family: 'Pretendard', -apple-system, sans-serif;
     color: #0f172a;
     -webkit-font-smoothing: antialiased;
-    /* 레이아웃 뒤틀림 방지 */
     scrollbar-gutter: stable;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+
+  /* html에 dark 클래스가 붙었을 때만 다크모드 배경 작동 */
+  html.dark body {
+    background: radial-gradient(circle at 0% 0%, #0f172a 0%, #020617 100%) !important;
+    color: #f8fafc;
   }
 }
 
 @layer components {
-  /* 페이지 진입 시 페이드 인 애니메이션입니다. */
   .animate-fade-in {
     animation: fadeIn 0.4s ease-out forwards;
   }
