@@ -1,4 +1,6 @@
 const db = require('../config/database');
+const geminiService = require('./gemini.service');
+
 const {
   POSTURE_STATUS,
   POSE_TYPE,
@@ -161,6 +163,52 @@ async function endSession({ immIdx, userIdx, immScore }) {
         WHERE imm_idx = ? AND user_idx = ?
       `,
       [finalScore, immIdx, userIdx]
+    );
+
+    // 자세 기록 조회
+    const [poseSummary] = await conn.query(
+      `SELECT pose_status, COUNT(*) AS count
+       FROM poses
+       WHERE imm_idx = ?
+       GROUP BY pose_status`,
+      [immIdx]
+    );
+
+    // 평균 소음 조회
+    const [noiseData] = await conn.query(
+      `SELECT AVG(decibel) AS avg_decibel
+       FROM noises
+       WHERE imm_idx = ?`,
+      [immIdx]
+    );
+
+    const avgDecibel = Math.round(noiseData[0]?.avg_decibel || 0);
+
+    // 집중 시간 조회
+    const [timeData] = await conn.query(
+      `SELECT TIMESTAMPDIFF(SECOND, start_time, CURTIME()) AS total_seconds
+       FROM immersions
+       WHERE imm_idx = ?`,
+      [immIdx]
+    );
+
+    const totalSeconds = timeData[0]?.total_seconds || 0;
+
+    // Gemini 피드백 생성
+    const feedback = await geminiService.generateFeedback({
+      totalSeconds,
+      immScore: finalScore,
+      avgDecibel,
+      poseSummary,
+    });
+
+    // immersions 테이블에 ai_feedback 저장
+    await conn.query(
+      `UPDATE immersions 
+       SET ai_feedback = ? 
+       WHERE imm_idx = ?
+      `,
+      [JSON.stringify(feedback), immIdx]
     );
 
     await conn.commit();
