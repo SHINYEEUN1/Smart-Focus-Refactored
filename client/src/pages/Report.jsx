@@ -14,43 +14,36 @@ import { immersionApi } from '../shared/api';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 /* --- 공통 데이터 매핑 상수 정의 --- */
-
 const NOISE_LABEL_MAP = {
-  'ambient': '주변 소음',
-  'speech': '대화 소음',
-  'music': '음악 소음',
-  'construction': '공사 소음',
-  'traffic': '교통 소음',
-  'none': '없음'
+  'ambient': '주변 소음', 'speech': '대화 소음', 'music': '음악 소음',
+  'construction': '공사 소음', 'traffic': '교통 소음', 'none': '없음'
 };
 
 const POSE_DETAIL_MAP = {
   'TILTED_WARNING': { label: '고개 기울임 위험', color: 'text-rose-600', bg: 'bg-rose-50' },
   'TILTED_CAUTION': { label: '고개 기울임 주의', color: 'text-amber-600', bg: 'bg-amber-50' },
   'LEANING_ON_HAND': { label: '턱 괴기 감지', color: 'text-orange-600', bg: 'bg-orange-50' },
-  'TURTLE_NECK': { label: '거북목(구부정함)', color: 'text-rose-600', bg: 'bg-rose-50' },
+  'TURTLE_NECK': { label: '거북목 주의', color: 'text-rose-600', bg: 'bg-rose-50' },
   'TURNING_HEAD': { label: '시선 이탈', color: 'text-indigo-600', bg: 'bg-indigo-50' },
   'PHONE_USAGE': { label: '스마트폰 사용', color: 'text-slate-600', bg: 'bg-slate-50' },
-  'NORMAL': { label: '정상 자세', color: 'text-emerald-600', bg: 'bg-emerald-50' }
+  'NORMAL': { label: '정상 자세', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  /* 추가된 영문 식별자 한국어 패치 */
+  'HAND_NEAR_FACE_CAUTION': { label: '얼굴 주변 손 감지', color: 'text-amber-600', bg: 'bg-amber-50' },
+  'SLUMPED_WARNING': { label: '구부정한 자세 위험', color: 'text-rose-600', bg: 'bg-rose-50' },
+  'SLUMPED_CAUTION': { label: '자세 낮아짐 주의', color: 'text-amber-600', bg: 'bg-amber-50' },
+  'STATIC_WARNING': { label: '장시간 부동 자세', color: 'text-rose-600', bg: 'bg-rose-50' },
+  'STATIC_CAUTION': { label: '부동 자세 주의', color: 'text-amber-600', bg: 'bg-amber-50' },
+  'TURTLE_NECK_WARNING': { label: '거북목 위험', color: 'text-rose-600', bg: 'bg-rose-50' },
+  'TURTLE_NECK_CAUTION': { label: '거북목 주의', color: 'text-amber-600', bg: 'bg-amber-50' }
 };
-
-/* --- 공통 SVG 아이콘 컴포넌트 정의 --- */
-
-const ChartAreaIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
-);
 
 const AiBrainApiIcon = () => (
   <svg width="40" height="40" viewBox="0 0 64 64" fill="none" className="text-indigo-100">
     <path d="M32 54C44.1503 54 54 44.1503 54 32C54 19.8497 44.1503 10 32 10C19.8497 10 10 19.8497 10 32C10 44.1503 19.8497 54 32 54Z" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M32 44V20" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M22 34L32 24L42 34" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M32 44V20" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/><path d="M22 34L32 24L42 34" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
-/**
- * 집중 분석 리포트 페이지 컴포넌트
- */
 export default function Report() {
   const navigate = useNavigate();
   const { imm_idx } = useParams();
@@ -59,7 +52,6 @@ export default function Report() {
   const [isLoading, setIsLoading] = useState(true);
   const [reportData, setReportData] = useState(null); 
   const [fullHistory, setFullHistory] = useState([]); 
-  const [bottomHistory, setBottomHistory] = useState([]); 
 
   const reportRef = useRef(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -79,10 +71,7 @@ export default function Report() {
           return;
         }
 
-        const [reportResult, historyResult] = await Promise.all([
-          immersionApi.getReportDetail(imm_idx),
-          immersionApi.getHistory(user_idx)
-        ]);
+        const reportResult = await immersionApi.getReportDetail(imm_idx);
 
         if (reportResult && reportResult.success && reportResult.data) {
           const { session, noise_summary, pose_summary, chart_data } = reportResult.data;
@@ -131,7 +120,19 @@ export default function Report() {
               warnings: totalWarnings,
               poseBreakdown: detailedPoses,
               mainNoise: NOISE_LABEL_MAP[noise_summary?.main_obstacle] || "주변 소음",
-              aiFeedback: session.ai_feedback || "분석된 피드백 데이터가 존재하지 않습니다."
+              aiFeedback: (() => {
+                if (!session.ai_feedback) return "분석된 피드백 데이터가 존재하지 않습니다.";
+                try {
+                  const parsed = JSON.parse(session.ai_feedback);
+                  if (typeof parsed === 'object' && parsed !== null) {
+                    const { 오늘의총평 = '', 긍정분석 = '', 보완사항 = '', 집중태그 = '' } = parsed;
+                    return `${오늘의총평} ${긍정분석} ${보완사항} ${집중태그}`.trim();
+                  }
+                  return session.ai_feedback;
+                } catch {
+                  return session.ai_feedback;
+                }
+              })(),
             },
             chart: {
               labels: processedData.map(d => d.label),
@@ -139,10 +140,6 @@ export default function Report() {
               noises: processedData.map(d => d.noise)
             }
           });
-        }
-
-        if (historyResult && historyResult.success) {
-          setBottomHistory(historyResult.data.filter(item => String(item.imm_idx) !== String(imm_idx)).slice(0, 4));
         }
       } catch (err) { console.error("리포트 조회 에러", err); } finally { setIsLoading(false); }
     };
@@ -199,7 +196,6 @@ export default function Report() {
     );
   }
 
-  /* 목록 모드 UI 렌더링 */
   if (!isDetailsMode) {
     return (
       <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans animate-fade-in">
@@ -232,9 +228,6 @@ export default function Report() {
     );
   }
 
-  if (!reportData) return null;
-
-  /* 차트 옵션 설정 */
   const chartOptions = {
     responsive: true, maintainAspectRatio: false, animation: false,
     plugins: { 
@@ -291,8 +284,9 @@ export default function Report() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
-        <div className="lg:col-span-8">
-          <div className="h-full bg-[#5B44F2] text-white p-6 md:p-8 rounded-3xl shadow-xl shadow-[#5B44F2]/20 relative overflow-hidden">
+        {/* lg:col-span-6으로 변경하여 비율 6:6 조정 */}
+        <div className="lg:col-span-6">
+          <div className="h-full bg-[#5B44F2] text-white p-6 md:p-8 rounded-3xl shadow-xl shadow-indigo-100 relative overflow-hidden transition-all">
             <div className="relative z-10 flex flex-col md:flex-row items-center gap-6">
               <div className="w-20 h-20 md:w-24 md:h-24 bg-white/10 rounded-3xl flex items-center justify-center border border-white/20"><AiBrainApiIcon /></div>
               <div className="text-center md:text-left flex-1">
@@ -302,7 +296,8 @@ export default function Report() {
             </div>
           </div>
         </div>
-        <div className="lg:col-span-4">
+        {/* lg:col-span-6으로 변경하여 비율 6:6 조정 */}
+        <div className="lg:col-span-6">
           <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-100 shadow-sm h-full hover:shadow-md transition-all">
             <h3 className="text-base font-bold text-slate-900 mb-5 flex items-center gap-2"><span className="w-1.5 h-4 bg-rose-500 rounded-full"></span>자세 정밀 분석</h3>
             <div className="space-y-3">
