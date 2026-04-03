@@ -95,13 +95,11 @@ export default function Report() {
 
           if (!session) { setIsLoading(false); return; }
 
-          /* 시간 데이터 포맷팅 및 자세 분석 상세 정보 가공 */
           const totalSecs = session.total_seconds || 0;
           const hrs = Math.floor(totalSecs / 3600).toString().padStart(2, '0');
           const mins = Math.floor((totalSecs % 3600) / 60).toString().padStart(2, '0');
           const secs = (totalSecs % 60).toString().padStart(2, '0');
 
-          /* 비정상 자세 데이터만 필터링하여 리스트화 */
           const detailedPoses = pose_summary
             ?.filter(p => p.pose_status !== 'GOOD_POSTURE' && p.pose_status !== 'NORMAL' && p.count > 0)
             .map(p => ({
@@ -114,7 +112,6 @@ export default function Report() {
 
           const totalWarnings = detailedPoses.reduce((sum, p) => sum + p.count, 0);
 
-          /* 시계열 데이터 최적화 및 가공 */
           let rawChartData = chart_data?.map(item => ({
             label: item.time_label, score: item.imm_score || 0, noise: item.decibel || 0
           })) || [];
@@ -158,48 +155,107 @@ export default function Report() {
     fetchAllData();
   }, [imm_idx, navigate, isDetailsMode]);
 
+  /**
+   * 리포트 화면을 캡처하여 최적화된 파일명으로 PDF 저장합니다.
+   */
   const handleExportPDF = async () => {
-    if (!reportRef.current) return;
+    if (!reportRef.current || !reportData) return;
+
     setIsExporting(true);
+
     setTimeout(async () => {
       try {
-        const dataUrl = await toPng(reportRef.current, { backgroundColor: '#f8fafc', pixelRatio: 2 });
+        const dataUrl = await toPng(reportRef.current, { 
+          backgroundColor: '#f8fafc', 
+          pixelRatio: 2,
+          filter: (node) => {
+            if (node.classList?.contains('pdf-exclude')) return false;
+            return true;
+          }
+        });
+
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (pdf.getImageProperties(dataUrl).height * pdfWidth) / pdf.getImageProperties(dataUrl).width;
+        const imgProps = pdf.getImageProperties(dataUrl);
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
         pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        pdf.save(`Focus_Report_${imm_idx}.pdf`);
-      } catch (err) { console.error("내보내기 실패"); } finally { setIsExporting(false); }
+
+        const userInfoStr = localStorage.getItem('user_info');
+        const userName = userInfoStr ? JSON.parse(userInfoStr).user_name : '유저';
+        
+        const d = new Date(reportData.summary.date);
+        const dateStr = d.toISOString().split('T')[0].replace(/-/g, '');
+        const timeStr = reportData.summary.time.replace(/:/g, '').substring(0, 4);
+        
+        const fileName = `[몰입리포트]_${userName}_${dateStr}_${timeStr}.pdf`;
+
+        pdf.save(fileName);
+      } catch (err) {
+        console.error('PDF 저장 오류:', err.message);
+      } finally {
+        setIsExporting(false);
+      }
     }, 500);
   };
 
-  if (isLoading) return null;
+  /* 로딩 중일 때는 아무것도 렌더링하지 않거나 스피너 표시 */
+  if (isLoading) {
+    return (
+      <div className="min-h-[85vh] flex flex-col items-center justify-center gap-4">
+        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-slate-500 font-bold tracking-widest animate-pulse">데이터를 불러오는 중...</p>
+      </div>
+    );
+  }
 
-  /* 그래프 시인성 개선 및 이중 Y축 설정 */
+  /* 목록 모드 UI 렌더링 */
+  if (!isDetailsMode) {
+    return (
+      <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-10 pb-6 border-b border-slate-200/60 gap-4 md:gap-0">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-black tracking-tighter text-slate-900 mb-1">분석 리포트 보관함</h2>
+            <p className="text-sm md:text-base text-slate-500 font-medium">과거에 측정했던 몰입 세션 기록들을 확인하고 비교해보세요.</p>
+          </div>
+          <div className="px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-xs md:text-sm font-bold text-indigo-700">
+            📊 총 {fullHistory.length}개의 몰입 데이터
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {fullHistory.map((session, idx) => (
+            <div key={idx} onClick={() => navigate(`/report/${session.imm_idx}`)} className="p-6 rounded-3xl border border-slate-100 bg-white hover:border-indigo-200 hover:shadow-lg transition-all cursor-pointer group shadow-sm">
+              <div className="flex justify-between items-center mb-5">
+                <span className="font-extrabold text-slate-700 text-lg">{new Date(session.imm_date).toLocaleDateString()}</span>
+                <span className="text-sm font-black text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">{session.imm_score}점</span>
+              </div>
+              <div className="text-sm text-slate-500 font-medium space-y-2 mt-auto">
+                <p className="flex justify-between border-b border-slate-100 pb-2"><span>시작 시간</span> <span className="text-slate-900 font-semibold">{session.start_time?.substring(0, 5)}</span></p>
+                <p className="flex justify-between border-b border-slate-100 pb-2"><span>총 집중</span> <span className="text-slate-900 font-semibold">{session.formatted_time || '0분'}</span></p>
+                <p className="flex justify-between"><span>자세 이탈</span> <span className="text-rose-500 font-semibold">{session.pose_count}회</span></p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /* --- 상세 모드 가드 클로즈: reportData가 없으면 에러 방지를 위해 리턴 --- */
+  if (!reportData) return null;
+
+  /* 차트 옵션 설정 */
   const chartOptions = {
     responsive: true, maintainAspectRatio: false, animation: false,
     plugins: { 
       legend: { display: false }, 
-      tooltip: { 
-        backgroundColor: 'rgba(15, 23, 42, 0.9)', 
-        padding: 12, 
-        cornerRadius: 8,
-        callbacks: {
-          label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}${ctx.datasetIndex === 0 ? '%' : 'dB'}`
-        }
-      } 
+      tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)', padding: 12, cornerRadius: 8, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}${ctx.datasetIndex === 0 ? '%' : 'dB'}` } } 
     },
     layout: { padding: { left: 10, right: 10, top: 30, bottom: 10 } },
     scales: {
-      y: { 
-        type: 'linear', position: 'left', beginAtZero: true, max: 110,
-        grid: { color: 'rgba(241, 245, 249, 0.5)', drawBorder: false },
-        ticks: { callback: (v) => v <= 100 ? v + '%' : '', color: '#6366f1', font: { weight: 'bold' } }
-      },
-      y1: {
-        type: 'linear', position: 'right', beginAtZero: true, suggestedMax: 120,
-        grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + 'dB', color: '#94a3b8' }
-      },
+      y: { type: 'linear', position: 'left', beginAtZero: true, max: 110, grid: { color: 'rgba(241, 245, 249, 0.5)', drawBorder: false }, ticks: { callback: (v) => v <= 100 ? v + '%' : '', color: '#6366f1', font: { weight: 'bold' } } },
+      y1: { type: 'linear', position: 'right', beginAtZero: true, suggestedMax: 120, grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + 'dB', color: '#94a3b8' } },
       x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 11 }, maxTicksLimit: 10 } }
     },
     interaction: { intersect: false, mode: 'index' },
@@ -213,17 +269,25 @@ export default function Report() {
     ]
   };
 
+  let formattedDetailDate = '날짜 정보 없음';
+  if (reportData.summary.date) {
+    const d = new Date(reportData.summary.date);
+    formattedDetailDate = `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, '0')}. ${String(d.getDate()).padStart(2, '0')}`;
+  }
+
   return (
-    <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans selection:bg-indigo-100" ref={reportRef}>
+    <div className="max-w-[1400px] mx-auto min-h-[90vh] text-slate-800 p-4 sm:p-6 md:p-10 font-sans" ref={reportRef}>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-10 pb-6 border-b border-slate-200/60 gap-4 md:gap-0">
         <div>
-          <button onClick={() => navigate('/report')} className="text-sm font-bold text-indigo-600 mb-2.5 flex items-center gap-1.5 group">
+          <button onClick={() => navigate('/report')} className="text-sm font-bold text-indigo-600 mb-2.5 flex items-center gap-1.5 group pdf-exclude">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transform transition-transform group-hover:-translate-x-1"><path d="m15 18-6-6 6-6"/></svg> 보관함으로 돌아가기
           </button>
           <h2 className="text-2xl md:text-3xl font-black tracking-tighter text-slate-900 mb-1">종합 분석 리포트</h2>
           <p className="text-sm md:text-base text-slate-500 font-medium">측정된 집중 패턴 및 주변 환경에 대한 분석 결과입니다.</p>
         </div>
-        {!isExporting && <button onClick={handleExportPDF} className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs md:text-sm font-bold shadow-md hover:bg-slate-700 transition-all">📥 PDF 저장</button>}
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto pdf-exclude">
+          {!isExporting && <button onClick={handleExportPDF} className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs md:text-sm font-bold shadow-md hover:bg-slate-700 transition-all">📥 PDF 저장</button>}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
@@ -244,7 +308,6 @@ export default function Report() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
-        {/* AI 몰입 분석 피드백 카드 */}
         <div className="lg:col-span-8">
           <div className="h-full bg-indigo-600 text-white p-6 md:p-8 rounded-3xl shadow-xl shadow-indigo-100 relative overflow-hidden">
             <div className="relative z-10 flex flex-col md:flex-row items-center gap-6">
@@ -256,63 +319,30 @@ export default function Report() {
             </div>
           </div>
         </div>
-
-        {/* 자세 정밀 분석 상세 섹션 */}
         <div className="lg:col-span-4">
           <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-100 shadow-sm h-full">
-            <h3 className="text-base font-bold text-slate-900 mb-5 flex items-center gap-2">
-              <span className="w-1.5 h-4 bg-rose-500 rounded-full"></span>자세 정밀 분석
-            </h3>
+            <h3 className="text-base font-bold text-slate-900 mb-5 flex items-center gap-2"><span className="w-1.5 h-4 bg-rose-500 rounded-full"></span>자세 정밀 분석</h3>
             <div className="space-y-3">
-              {reportData.summary.poseBreakdown.length > 0 ? (
-                reportData.summary.poseBreakdown.map((pose, i) => (
-                  <div key={i} className={`flex justify-between items-center p-4 rounded-2xl ${pose.bg} border border-white/50`}>
-                    <span className={`font-bold ${pose.color}`}>{pose.label}</span>
-                    <span className="text-slate-900 font-black">{pose.count}<span className="text-xs text-slate-400 font-bold ml-0.5">회</span></span>
-                  </div>
-                ))
-              ) : (
-                <div className="py-10 text-center opacity-40">
-                  <p className="text-sm font-bold">감지된 자세 결함이 없습니다.</p>
+              {reportData.summary.poseBreakdown.length > 0 ? reportData.summary.poseBreakdown.map((pose, i) => (
+                <div key={i} className={`flex justify-between items-center p-4 rounded-2xl ${pose.bg} border border-white/50`}>
+                  <span className={`font-bold ${pose.color}`}>{pose.label}</span>
+                  <span className="text-slate-900 font-black">{pose.count}<span className="text-xs text-slate-400 font-bold ml-0.5">회</span></span>
                 </div>
-              )}
+              )) : <div className="py-10 text-center opacity-40"><p className="text-sm font-bold">감지된 자세 결함이 없습니다.</p></div>}
             </div>
           </div>
         </div>
       </div>
 
-      {/* 시계열 추이 분석 그래프 */}
       <div className="bg-white p-6 md:p-10 rounded-3xl border border-slate-100 shadow-sm mb-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 md:mb-10 px-2 gap-3 sm:gap-0">
           <h3 className="text-base md:text-lg font-bold text-slate-900 tracking-tight">시간대별 몰입 트렌드 및 소음도 분석</h3>
-          <div className="flex gap-4 text-xs font-semibold text-slate-500">
+          <div className="flex gap-4 text-xs font-semibold text-slate-500 pdf-exclude">
             <div className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-[#5B44F2]"></span> 몰입 에너지(좌)</div>
             <div className="flex items-center gap-1.5"><span className="w-3 h-0.5 border-b border-dashed border-slate-400"></span> 주변 소음(우)</div>
           </div>
         </div>
         <div className="h-[250px] sm:h-[300px] md:h-[480px] w-full"><Line data={lineData} options={chartOptions} /></div>
-      </div>
-
-      {/* 히스토리 리스트 영역 (기존 코드 유지) */}
-      <div className="bg-white p-5 md:p-8 rounded-2xl border border-slate-100 shadow-sm">
-        <div className="flex items-center gap-3 mb-6 px-2">
-          <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-600 border border-slate-100"><ChartAreaIcon /></div>
-          <h3 className="text-base md:text-lg font-bold text-slate-900 tracking-tight">다른 날짜의 몰입 기록</h3>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {bottomHistory.length > 0 ? bottomHistory.map((session, idx) => (
-            <div key={idx} onClick={() => navigate(`/report/${session.imm_idx}`)} className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-indigo-200 hover:shadow-md hover:-translate-y-1 transition-all cursor-pointer group">
-              <div className="flex justify-between items-center mb-3">
-                <span className="font-bold text-slate-700">{new Date(session.imm_date).getMonth() + 1}월 {new Date(session.imm_date).getDate()}일</span>
-                <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">{session.imm_score}점</span>
-              </div>
-              <div className="text-sm text-slate-500 font-medium space-y-1.5">
-                <p className="flex justify-between"><span>시작 시간</span> <span className="text-slate-700">{session.start_time?.substring(0, 5)}</span></p>
-                <p className="flex justify-between"><span>자세 이탈</span> <span className="text-rose-500 font-bold">{session.pose_count}회</span></p>
-              </div>
-            </div>
-          )) : <div className="col-span-full py-10 text-center text-slate-400 font-medium">비교할 수 있는 다른 세션 기록이 없습니다.</div>}
-        </div>
       </div>
     </div>
   );
