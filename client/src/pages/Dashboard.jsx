@@ -33,7 +33,7 @@ export default function Dashboard() {
 
   const [decibel, setDecibel] = useState(0);
   const [isFocusing, setIsFocusing] = useState(false);
-  const [isEngineReady, setIsEngineReady] = useState(false); 
+  const [isEngineReady, setIsEngineReady] = useState(false);
   const [focusSeconds, setFocusSeconds] = useState(0);
   const [historyLog, setHistoryLog] = useState([]);
 
@@ -53,17 +53,17 @@ export default function Dashboard() {
 
     socketRef.current.on('analysis_result', (data) => {
       if (data.status === 'SUCCESS') {
-        setIsEngineReady(true); 
-        
+        setIsEngineReady(true);
+
         let currentStatus = 'NORMAL';
         const backendPosture = data.posture_status || data.postureStatus || '';
 
         if (backendPosture.includes('_WARNING') || backendPosture === 'LEANING_ON_HAND') {
           currentStatus = 'WARNING';
-        } 
+        }
         else if (backendPosture.includes('_CAUTION')) {
           currentStatus = 'CAUTION';
-        } 
+        }
         else {
           currentStatus = 'NORMAL';
         }
@@ -73,7 +73,7 @@ export default function Dashboard() {
         }
         setServerStatus(currentStatus);
 
-        const finalScore = data.current_score || 0; 
+        const finalScore = data.current_score || 0;
         setDisplayScore(finalScore);
 
         const time = new Date().toLocaleTimeString('ko-KR');
@@ -182,28 +182,30 @@ export default function Dashboard() {
       ctx.strokeStyle = "rgba(234, 255, 113, 0.8)"; ctx.lineWidth = 2;
       res.poseLandmarks.forEach(p => { ctx.beginPath(); ctx.arc(p.x * 640, p.y * 480, 3, 0, 2 * Math.PI); ctx.fillStyle = "#D9F99D"; ctx.fill(); ctx.stroke(); }); ctx.restore();
 
-      if (needsCalibrationRef.current) { 
+      if (needsCalibrationRef.current) {
         const leftEar = res.poseLandmarks[7] || { x: 0, y: 0 };
         const leftShoulder = res.poseLandmarks[11] || { x: 0, y: 0 };
         const nose = res.poseLandmarks[0] || { x: 0, y: 0 };
+        const rightEar = res.poseLandmarks[8] || { x: 0, y: 0 };
 
-        calibrationRef.current = { 
+        calibrationRef.current = {
           distY: Math.abs(leftEar.y - leftShoulder.y),
           noseY: nose.y,
           earX: leftEar.x,
-          sideDistX: Math.abs(leftEar.x - leftShoulder.x) * 640 
-        }; 
-        needsCalibrationRef.current = false; 
+          sideDistX: Math.abs(leftEar.x - leftShoulder.x) * 640,
+          baseEarDist: Math.abs(leftEar.x - rightEar.x) * 640
+        };
+        needsCalibrationRef.current = false;
       }
 
       const now = Date.now();
       if (now - lastSentTimeRef.current >= 1000) {
         lastSentTimeRef.current = now;
-        
+
         if (socketRef.current) {
-          socketRef.current.emit('stream_data', { 
-            imm_idx: currentImmIdxRef.current, 
-            landmarks: res.poseLandmarks, 
+          socketRef.current.emit('stream_data', {
+            imm_idx: currentImmIdxRef.current,
+            landmarks: res.poseLandmarks,
             noise_db: decibelRef.current,
             calibration: calibrationRef.current,
             faceLandmarks: faceLandmarksRef.current
@@ -239,7 +241,7 @@ export default function Dashboard() {
     if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
     if (poseRef.current) { poseRef.current.close(); poseRef.current = null; }
     if (faceMeshRef.current) { faceMeshRef.current.close(); faceMeshRef.current = null; }
-    
+
     setIsEngineReady(false);
     setServerFeedback("우측 상단의 '▶ 측정 시작' 버튼을 눌러주세요.");
     setServerStatus('--');
@@ -263,7 +265,7 @@ export default function Dashboard() {
       if (result && result.success && result.data?.imm_idx) {
         const immIdx = result.data.imm_idx;
         setCurrentImmIdx(immIdx);
-        currentImmIdxRef.current = immIdx; 
+        currentImmIdxRef.current = immIdx;
 
         setIsFocusing(true);
         setFocusSeconds(0);
@@ -303,7 +305,7 @@ export default function Dashboard() {
       const result = await immersionApi.end({
         imm_idx: currentImmIdxRef.current,
         imm_score: finalScore,
-        user_idx: actualUserIdx 
+        user_idx: actualUserIdx
       });
 
       if (result && result.success) {
