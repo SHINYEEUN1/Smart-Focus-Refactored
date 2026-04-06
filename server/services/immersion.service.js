@@ -220,28 +220,27 @@ async function endSession({ immIdx, userIdx, immScore }) {
     );
     const totalPoints = pointSum[0].total;
 
-    // 획득 가능한 뱃지 조회
-    // 조건 1: badge_point(뱃지 필요 포인트) <= 현재 보유 포인트
-    // 조건 2: 이미 받은 뱃지는 제외 (user_badges 테이블 기준)
-    // 가장 포인트가 적게 필요한 것부터, 아직 안 받은 것 중 1개
+    // 획득 가능한 뱃지 전체 조회
+    // 조건 1: badge_point <= 현재 보유 포인트 (감당 가능한 뱃지만)
+    // 조건 2: 이미 받은 뱃지는 제외 (user_badges 테이블 기준, 중복 수령 방지)
+    // ORDER BY badge_point ASC: 낮은 포인트 뱃지부터 순서대로 부여
+    // LIMIT 제거: 조건을 만족하는 뱃지 전체를 한 번에 부여
     const [availableBadges] = await conn.query(
       `SELECT * FROM badges 
        WHERE badge_point <= ?
        AND badge_idx NOT IN (
-         SELECT badge_idx FROM user_badges WHERE user_idx = ?
-       )
-       ORDER BY badge_point ASC
-       LIMIT 1`,
+        SELECT badge_idx FROM user_badges WHERE user_idx = ?
+      )
+      ORDER BY badge_point ASC`,
       [totalPoints, userIdx]
     );
 
-    if (availableBadges.length > 0) {
-      const badge = availableBadges[0];
-
+    // 획득 가능한 뱃지 전체를 순서대로 순회하며 부여
+    for (const badge of availableBadges) {
       // user_badges 테이블에 뱃지 수령 기록 저장
       await conn.query(
         `INSERT INTO user_badges (user_idx, badge_idx, created_at) 
-         VALUES (?, ?, CURRENT_TIMESTAMP)`,
+     VALUES (?, ?, CURRENT_TIMESTAMP)`,
         [userIdx, badge.badge_idx]
       );
 
@@ -249,19 +248,19 @@ async function endSession({ immIdx, userIdx, immScore }) {
       // reward_point에 음수 값으로 INSERT해 차감 이력을 남김
       await conn.query(
         `INSERT INTO points (user_idx, reward_type, reward_point, earned_at) 
-         VALUES (?, '뱃지 차감', ?, CURRENT_TIMESTAMP)`,
+     VALUES (?, '뱃지 차감', ?, CURRENT_TIMESTAMP)`,
         [userIdx, -badge.badge_point]
       );
     }
-
     // ── 뱃지 자동 부여 체크 끝 ───────────────────────────────────────────────
+
     await conn.commit();
 
     return {
       calculated_score: finalScore,
       earned_points: rewardPoint,
-      // 뱃지를 새로 받았으면 뱃지 정보 포함, 없으면 null
-      new_badge: availableBadges.length > 0 ? availableBadges[0] : null
+      // 새로 받은 뱃지 전체 배열 반환, 없으면 null
+      new_badges: availableBadges.length > 0 ? availableBadges : null
     };
 
   } catch (error) {
