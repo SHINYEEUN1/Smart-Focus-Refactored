@@ -2,6 +2,54 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+
+/**
+ * Gemini API 호출 실패 시 세션 데이터 기반으로 자체 피드백을 생성합니다.
+ * @param {Object} sessionData - 세션 데이터
+*/
+
+function generateFallbackFeedback({ totalSeconds, immScore, avgDecibel, poseSummary }) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const timeText = hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
+
+  // 점수 기반 총평
+  const 총평 = immScore >= 80
+    ? `${timeText} 동안 높은 집중력을 유지했어요. 오늘의 세션은 성공적이었습니다.`
+    : `${timeText} 동안 집중 세션을 완료했어요. 꾸준한 노력이 성장을 만듭니다.`;
+
+  // 긍정 분석
+  const 긍정 = `총 ${timeText} 집중했으며, 몰입도 점수는 ${immScore}점이에요. ` +
+    (avgDecibel < 50
+      ? `주변 소음이 ${avgDecibel}dB로 조용한 환경에서 집중할 수 있었어요.`
+      : `평균 소음 ${avgDecibel}dB 환경에서도 집중을 유지한 점이 인상적이에요.`);
+
+  // 자세 불량 건수
+  const badPoses = poseSummary
+    ? poseSummary.filter(p => p.pose_status !== 'GOOD_POSTURE' && p.pose_status !== 'NORMAL')
+    : [];
+
+  const totalBadCount = badPoses.reduce((sum, p) => sum + Number(p.count), 0);
+
+  // 보완 사항
+  const 보완 = totalBadCount > 0
+    ? `자세 불량이 총 ${totalBadCount}회 감지되었어요. 허리를 곧게 펴고 모니터와의 거리를 유지해보세요.`
+    : `자세 불량이 감지되지 않았어요. 올바른 자세 습관을 계속 유지해주세요.`;
+
+  // 태그
+  const 태그 = [
+    immScore >= 80 ? '#성공적_집중' : '#집중력_향상중',
+    totalBadCount === 0 ? '#자세_완벽' : '#자세주의',
+    avgDecibel < 50 ? '#조용한_환경' : '#소음_극복'
+  ].join(' ');
+
+  return {
+    오늘의총평: 총평,
+    긍정분석: 긍정,
+    보완사항: 보완,
+    집중태그: 태그
+  };
+}
 /**
  * 세션 데이터를 바탕으로 Gemini AI 피드백을 생성합니다.
  * @param {Object} sessionData - 세션 데이터
@@ -10,6 +58,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
  * @param {number} sessionData.avgDecibel - 평균 소음(dB)
  * @param {Array}  sessionData.poseSummary - 자세 기록 [{ pose_status, count }]
  */
+
 async function generateFeedback(sessionData) {
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
@@ -24,9 +73,9 @@ async function generateFeedback(sessionData) {
     // 자세 기록 텍스트 변환
     const poseText = poseSummary && poseSummary.length > 0
       ? poseSummary
-          .filter(p => p.pose_status !== 'GOOD_POSTURE' && p.pose_status !== 'NORMAL')
-          .map(p => `${p.pose_status}: ${p.count}회`)
-          .join(', ')
+        .filter(p => p.pose_status !== 'GOOD_POSTURE' && p.pose_status !== 'NORMAL')
+        .map(p => `${p.pose_status}: ${p.count}회`)
+        .join(', ')
       : '자세 불량 없음';
 
     const prompt = `
@@ -72,12 +121,7 @@ async function generateFeedback(sessionData) {
     return parsed;
   } catch (error) {
     console.error('[GEMINI ERROR]', error);
-    return {
-      오늘의총평: '피드백 생성 중 오류가 발생했습니다.',
-      긍정분석: '',
-      보완사항: '',
-      집중태그: ''
-    };
+    return generateFallbackFeedback(sessionData);
   }
 }
 
