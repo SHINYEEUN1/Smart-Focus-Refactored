@@ -12,6 +12,15 @@ const MedalIcon = () => <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none"
 const SettingsIcon = () => <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>;
 const ListIcon = () => <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
 
+/* --- 뱃지 기준 가이드 --- */
+const BADGE_GUIDE = [
+  { id: 'starter', name: '초보 집중러', threshold: 100, icon: '🌱', desc: '누적 100점 달성' },
+  { id: 'bronze', name: '브론즈 뱃지', threshold: 500, icon: '🥉', desc: '누적 500점 달성' },
+  { id: 'silver', name: '실버 뱃지', threshold: 1000, icon: '🥈', desc: '누적 1,000점 달성' },
+  { id: 'gold', name: '골드 뱃지', threshold: 2500, icon: '🥇', desc: '누적 2,500점 달성' },
+  { id: 'platinum', name: '플래티넘 뱃지', threshold: 5000, icon: '💎', desc: '누적 5,000점 달성' }
+];
+
 export default function MyPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -128,6 +137,10 @@ export default function MyPage() {
       .map(item => new Date(item.imm_date).getDate())
   )];
 
+  /* --- 레벨 계산 로직 추가 --- */
+  const currentLevel = Math.floor((pageData.stats?.total_points || 0) / 500) + 1;
+  const levelExp = (pageData.stats?.total_points || 0) % 500;
+
   if (isLoading) {
     return (
       <div className="min-h-[85vh] flex flex-col items-center justify-center gap-4">
@@ -179,7 +192,10 @@ export default function MyPage() {
             </div>
 
             <div>
-              <span className="inline-block px-4 py-1.5 bg-indigo-50 text-[#5B44F2] text-xs font-black tracking-widest rounded-xl mb-3 border border-indigo-100 uppercase">Focus Runner</span>
+              <div className="flex items-center gap-2 mb-3 justify-center md:justify-start">
+                <span className="px-3 py-1 bg-[#5B44F2] text-white text-[10px] font-black rounded-lg uppercase tracking-wider">LV.{currentLevel}</span>
+                <span className="px-3 py-1 bg-indigo-50 text-[#5B44F2] text-xs font-black tracking-widest rounded-lg border border-indigo-100 uppercase">Focus Runner</span>
+              </div>
               <h2 className="text-3xl font-black text-slate-900 mb-1 tracking-tight transition-colors">{userInfo.nick}님</h2>
               <p className="text-slate-500 font-semibold text-sm transition-colors">{userInfo.email}</p>
             </div>
@@ -187,9 +203,34 @@ export default function MyPage() {
           <div className="text-center md:text-right w-full md:w-auto md:pl-12 md:border-l-2 border-slate-100">
             <div className="text-sm font-bold text-slate-500 mb-2">누적 집중 포인트</div>
             <div className="text-5xl font-black text-[#5B44F2] tracking-tighter leading-none mb-4 transition-colors">{stats?.total_points?.toLocaleString() || 0}</div>
+            {/* 레벨업 프로그레스 바 추가 */}
+            <div className="w-full md:w-48 bg-slate-100 h-2 rounded-full overflow-hidden mb-2 shadow-inner">
+              <div className="bg-[#5B44F2] h-full transition-all duration-700 ease-out" style={{ width: `${(levelExp / 500) * 100}%` }}></div>
+            </div>
+            <p className="text-[10px] font-bold text-slate-400 tracking-tighter uppercase mb-2">Next Level: {500 - levelExp} points left</p>
             <div className="inline-block text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
               총 {stats?.total_sessions || 0}번의 집중 완료!
             </div>
+          </div>
+        </div>
+
+        {/* [뱃지 도감 영역 추가] */}
+        <div className="lg:col-span-12 bg-white border border-slate-200 shadow-sm rounded-[1.5rem] p-8 transition-all hover:shadow-md">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-indigo-50 text-[#5B44F2] rounded-xl flex items-center justify-center flex-shrink-0"><MedalIcon /></div>
+            <h3 className="text-xl font-bold text-slate-900 tracking-tight">집중 뱃지 도감</h3>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {BADGE_GUIDE.map((badge) => {
+              const isEarned = (stats?.total_points || 0) >= badge.threshold;
+              return (
+                <div key={badge.id} className={`flex flex-col items-center p-6 rounded-3xl border transition-all duration-300 ${isEarned ? 'bg-white border-indigo-100 shadow-sm scale-100' : 'bg-slate-50/50 border-transparent opacity-40 grayscale scale-95'}`}>
+                  <span className="text-4xl mb-3 drop-shadow-sm">{badge.icon}</span>
+                  <span className="text-sm font-black text-slate-900 mb-1">{badge.name}</span>
+                  <span className="text-[10px] font-bold text-[#5B44F2] bg-indigo-50 px-2 py-0.5 rounded-md whitespace-nowrap">{badge.desc}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
