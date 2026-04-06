@@ -141,6 +141,9 @@ export default function MyPage() {
   const currentLevel = Math.floor((pageData.stats?.total_points || 0) / 500) + 1;
   const levelExp = (pageData.stats?.total_points || 0) % 500;
 
+  /* --- 실시간 뱃지 개수 계산 추가 --- */
+  const earnedBadgeCount = BADGE_GUIDE.filter(badge => (pageData.stats?.total_points || 0) >= badge.threshold).length;
+
   if (isLoading) {
     return (
       <div className="min-h-[85vh] flex flex-col items-center justify-center gap-4">
@@ -313,7 +316,8 @@ export default function MyPage() {
               <div className="w-14 h-14 bg-indigo-50 text-[#5B44F2] rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">🏅</div>
               <div className="flex flex-col min-w-0">
                 <span className="font-bold text-slate-900 text-base truncate">획득한 뱃지</span>
-                <span className="font-black text-[#5B44F2] mt-1 truncate">{stats?.badge_count || 0}개</span>
+                {/* 기존 stats.badge_count 대신 earnedBadgeCount 렌더링 */}
+                <span className="font-black text-[#5B44F2] mt-1 truncate">{earnedBadgeCount}개</span>
               </div>
             </div>
           </div>
