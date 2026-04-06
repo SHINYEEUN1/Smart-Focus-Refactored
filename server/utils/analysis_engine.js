@@ -304,7 +304,7 @@ const analyze_posture = (landmarks, mode = 'FRONT_VIEW', calibration = null, fac
      * [4] 엎드림 판정
      */
     // 4-1. h_offset 기준 (즉각 감지)
-    if (h_offset >= 0.06) return 'SLUMPED_WARNING';
+    if (h_offset >= 0.05) return 'SLUMPED_WARNING';
 
     // 4-2. calibration 기준 코 위치 변화량으로 판정 (정면 한정)
     if (currentMode === 'FRONT_VIEW' && calibration && calibration.noseY) {
