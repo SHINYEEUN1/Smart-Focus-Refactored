@@ -12,13 +12,13 @@ const MedalIcon = () => <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none"
 const SettingsIcon = () => <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>;
 const ListIcon = () => <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
 
-/* --- 뱃지 기준 가이드 --- */
+/* --- [수정] 뱃지 기준 가이드: '달성'에서 '차감' 개념으로 워딩 변경 --- */
 const BADGE_GUIDE = [
-  { id: 'starter', name: '초보 집중러', threshold: 100, icon: '🌱', desc: '누적 100점 달성' },
-  { id: 'bronze', name: '브론즈 뱃지', threshold: 500, icon: '🥉', desc: '누적 500점 달성' },
-  { id: 'silver', name: '실버 뱃지', threshold: 1000, icon: '🥈', desc: '누적 1,000점 달성' },
-  { id: 'gold', name: '골드 뱃지', threshold: 2500, icon: '🥇', desc: '누적 2,500점 달성' },
-  { id: 'platinum', name: '플래티넘 뱃지', threshold: 5000, icon: '💎', desc: '누적 5,000점 달성' }
+  { id: 'starter', name: '초보 집중러', threshold: 100, icon: '🌱', desc: '100pt 차감' },
+  { id: 'bronze', name: '브론즈 뱃지', threshold: 500, icon: '🥉', desc: '500pt 차감' },
+  { id: 'silver', name: '실버 뱃지', threshold: 1000, icon: '🥈', desc: '1,000pt 차감' },
+  { id: 'gold', name: '골드 뱃지', threshold: 2500, icon: '🥇', desc: '2,500pt 차감' },
+  { id: 'platinum', name: '플래티넘 뱃지', threshold: 5000, icon: '💎', desc: '5,000pt 차감' }
 ];
 
 export default function MyPage() {
@@ -31,7 +31,6 @@ export default function MyPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [profileImg, setProfileImg] = useState(userInfo.profile_img || null);
   
-  /* 설정 관련 State */
   const [noiseThreshold, setNoiseThreshold] = useState(() => parseInt(localStorage.getItem('smart_focus_noise_db')) || 65);
   const [isSoundAlert, setIsSoundAlert] = useState(() => localStorage.getItem('setting_sound_alert') !== 'false');
   const [isWeeklyReport, setIsWeeklyReport] = useState(() => localStorage.getItem('setting_weekly_report') === 'true');
@@ -43,24 +42,14 @@ export default function MyPage() {
 
   const [calendarDate, setCalendarDate] = useState(new Date());
 
-  /**
-   * 이미지 업로드 클릭 핸들러
-   */
-  const handleImageClick = () => {
-    fileInputRef.current.click();
-  };
+  const handleImageClick = () => { fileInputRef.current.click(); };
 
-  /**
-   * 실제 파일 선택 및 서버 전송 로직
-   */
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setProfileImg(reader.result);
-    };
+    reader.onloadend = () => { setProfileImg(reader.result); };
     reader.readAsDataURL(file);
 
     const formData = new FormData();
@@ -137,18 +126,16 @@ export default function MyPage() {
       .map(item => new Date(item.imm_date).getDate())
   )];
 
-  /* --- 레벨 계산 로직 추가 --- */
+  /* --- [수정] 차감형 포인트 기준 프로그레스 바 로직 --- */
+  // 포인트가 차감되므로, 현재 잔여 포인트를 기준으로 다음 구매 가능한 뱃지(Next Milestone)를 계산합니다.
   const currentLevel = Math.floor((pageData.stats?.total_points || 0) / 500) + 1;
   const levelExp = (pageData.stats?.total_points || 0) % 500;
-
-  /* --- 실시간 뱃지 개수 계산 추가 --- */
-  const earnedBadgeCount = BADGE_GUIDE.filter(badge => (pageData.stats?.total_points || 0) >= badge.threshold).length;
 
   if (isLoading) {
     return (
       <div className="min-h-[85vh] flex flex-col items-center justify-center gap-4">
         <div className="w-12 h-12 border-4 border-[#5B44F2] border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-500 font-bold tracking-widest animate-pulse">개인 기록을 불러오고 있습니다...</p>
+        <p className="text-slate-500 font-bold tracking-widest animate-pulse">데이터를 불러오는 중...</p>
       </div>
     );
   }
@@ -169,7 +156,6 @@ export default function MyPage() {
         {/* [프로필 영역] */}
         <div className="lg:col-span-12 bg-white border border-slate-200 shadow-sm rounded-[1.5rem] p-8 md:p-10 flex flex-col md:flex-row justify-between items-center gap-8 transition-all hover:shadow-md hover:-translate-y-1">
           <div className="flex flex-col md:flex-row items-center gap-8 text-center md:text-left w-full md:w-auto">
-            {/* 프로필 이미지 컨테이너 */}
             <div className="relative group">
               <div 
                 onClick={handleImageClick}
@@ -180,18 +166,11 @@ export default function MyPage() {
                 ) : (
                   <UserIcon />
                 )}
-                {/* 호버 시 나타나는 카메라 오버레이 */}
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <CameraIcon className="text-white" />
                 </div>
               </div>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                className="hidden" 
-                accept="image/*" 
-              />
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
             </div>
 
             <div>
@@ -204,33 +183,37 @@ export default function MyPage() {
             </div>
           </div>
           <div className="text-center md:text-right w-full md:w-auto md:pl-12 md:border-l-2 border-slate-100">
-            <div className="text-sm font-bold text-slate-500 mb-2">누적 집중 포인트</div>
+            {/* [수정] 누적 -> 보유 포인트로 라벨 변경 (차감 로직 반영) */}
+            <div className="text-sm font-bold text-slate-500 mb-2">현재 보유 잔여 포인트</div>
             <div className="text-5xl font-black text-[#5B44F2] tracking-tighter leading-none mb-4 transition-colors">{stats?.total_points?.toLocaleString() || 0}</div>
-            {/* 레벨업 프로그레스 바 추가 */}
             <div className="w-full md:w-48 bg-slate-100 h-2 rounded-full overflow-hidden mb-2 shadow-inner">
               <div className="bg-[#5B44F2] h-full transition-all duration-700 ease-out" style={{ width: `${(levelExp / 500) * 100}%` }}></div>
             </div>
-            <p className="text-[10px] font-bold text-slate-400 tracking-tighter uppercase mb-2">Next Level: {500 - levelExp} points left</p>
+            <p className="text-[10px] font-bold text-slate-400 tracking-tighter uppercase mb-2">Next Badge: {500 - levelExp} points left</p>
             <div className="inline-block text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
               총 {stats?.total_sessions || 0}번의 집중 완료!
             </div>
           </div>
         </div>
 
-        {/* [뱃지 도감 영역 추가] */}
+        {/* [뱃지 도감 영역] */}
         <div className="lg:col-span-12 bg-white border border-slate-200 shadow-sm rounded-[1.5rem] p-8 transition-all hover:shadow-md">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-10 h-10 bg-indigo-50 text-[#5B44F2] rounded-xl flex items-center justify-center flex-shrink-0"><MedalIcon /></div>
-            <h3 className="text-xl font-bold text-slate-900 tracking-tight">집중 뱃지 도감</h3>
+            <h3 className="text-xl font-bold text-slate-900 tracking-tight">집중 뱃지 컬렉션</h3>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {BADGE_GUIDE.map((badge) => {
-              const isEarned = (stats?.total_points || 0) >= badge.threshold;
+            {BADGE_GUIDE.map((badge, idx) => {
+              /* [수정] 백엔드의 DB 수령 기록(badge_count)을 기준으로 뱃지 획득 여부를 판별합니다.
+                 백엔드 로직이 순차적(가장 적은 포인트부터 부여)이므로 index 비교가 정확합니다. */
+              const isEarned = (stats?.badge_count || 0) > idx;
               return (
                 <div key={badge.id} className={`flex flex-col items-center p-6 rounded-3xl border transition-all duration-300 ${isEarned ? 'bg-white border-indigo-100 shadow-sm scale-100' : 'bg-slate-50/50 border-transparent opacity-40 grayscale scale-95'}`}>
                   <span className="text-4xl mb-3 drop-shadow-sm">{badge.icon}</span>
                   <span className="text-sm font-black text-slate-900 mb-1">{badge.name}</span>
-                  <span className="text-[10px] font-bold text-[#5B44F2] bg-indigo-50 px-2 py-0.5 rounded-md whitespace-nowrap">{badge.desc}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md whitespace-nowrap ${isEarned ? 'text-white bg-[#5B44F2]' : 'text-[#5B44F2] bg-indigo-50'}`}>
+                    {isEarned ? '획득 완료' : badge.desc}
+                  </span>
                 </div>
               );
             })}
@@ -316,8 +299,8 @@ export default function MyPage() {
               <div className="w-14 h-14 bg-indigo-50 text-[#5B44F2] rounded-2xl flex items-center justify-center text-2xl flex-shrink-0">🏅</div>
               <div className="flex flex-col min-w-0">
                 <span className="font-bold text-slate-900 text-base truncate">획득한 뱃지</span>
-                {/* 기존 stats.badge_count 대신 earnedBadgeCount 렌더링 */}
-                <span className="font-black text-[#5B44F2] mt-1 truncate">{earnedBadgeCount}개</span>
+                {/* [수정] DB 수령 기록(badge_count)을 기준으로 렌더링합니다. */}
+                <span className="font-black text-[#5B44F2] mt-1 truncate">{stats?.badge_count || 0}개</span>
               </div>
             </div>
           </div>
