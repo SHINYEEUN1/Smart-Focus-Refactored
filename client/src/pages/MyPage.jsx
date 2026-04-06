@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { immersionApi, authApi } from '../shared/api';
 
 /**
- * [마이페이지 - 한국어 최적화 버전]
- * - [수정] '몰입' -> '집중' 문구 일괄 교체 완비
+ * [마이페이지 - 한국어 최적화 및 뱃지 컬렉션 최종본]
+ * - 뱃지 상점 -> 뱃지 컬렉션 개념으로 전환 (결제 버튼 삭제 및 자동 획득 안내 추가)
+ * - '몰입' -> '집중' 문구 일괄 교체 완비
  * - 달력 헤더(SUN~SAT)를 한국어(일~토)로 변경
  * - 비밀번호 변경 및 탈퇴 버튼 삭제 완료
+ * - [수정] 미사용 아이콘(Dead Code) 제거 및 목표 현황 표기 단위(%) 통일
  */
 const UserIcon = () => <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
 const CameraIcon = () => <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
-const MedalIcon = () => <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2 2 4.4l2.2-.13a2 2 0 0 1 2.2-.13L15 7.21" /><path d="M11 12h2" /><path d="M12 11v2" /></svg>;
 
 const BADGE_GUIDE = [
   { id: 'starter', name: '초보 집중러', threshold: 100, icon: '🌱' },
@@ -38,20 +39,6 @@ export default function MyPage() {
   });
 
   const [calendarDate, setCalendarDate] = useState(new Date());
-
-  const handlePurchaseBadge = async (badge) => {
-    if (!userInfo) return;
-    if (window.confirm(`[${badge.name}] 뱃지를 ${badge.threshold}pt에 구매하시겠습니까?`)) {
-      try {
-        const res = await immersionApi.purchaseBadge(userInfo.user_idx, badge.id);
-        if (res && res.success) {
-          alert(`🎉 [${badge.name}] 획득 성공!`);
-          const statsRes = await immersionApi.getStats(userInfo.user_idx);
-          if (statsRes.success) setPageData(prev => ({ ...prev, stats: statsRes.data }));
-        } else { alert(res?.message || "포인트가 부족합니다."); }
-      } catch (err) { alert("서버 통신 실패"); }
-    }
-  };
 
   const handleImageClick = () => fileInputRef.current.click();
   const handleFileChange = async (e) => {
@@ -151,20 +138,25 @@ export default function MyPage() {
           <div className="flex justify-between items-center mb-10 pb-4 border-b border-slate-50">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-indigo-50 text-[#5B44F2] rounded-2xl flex items-center justify-center shadow-sm font-bold text-xl">🏆</div>
-              <h3 className="text-2xl font-bold tracking-tight">집중 뱃지 상점</h3>
+              <h3 className="text-2xl font-bold tracking-tight">집중 뱃지 컬렉션</h3>
             </div>
             <span className="text-sm font-black text-[#5B44F2] bg-indigo-50 px-6 py-3 rounded-2xl border border-indigo-100 shadow-inner">보유 포인트: {(pageData.stats?.total_points || 0).toLocaleString()} pt</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
             {BADGE_GUIDE.map((badge, idx) => {
               const isEarned = (pageData.stats?.badge_count || 0) > idx;
-              const canBuy = !isEarned && (pageData.stats?.total_points || 0) >= badge.threshold;
               return (
-                <div key={badge.id} className={`flex flex-col items-center p-8 rounded-[2.5rem] border transition-all duration-300 ${isEarned ? 'bg-white border-indigo-100 shadow-lg scale-100' : canBuy ? 'bg-white border-emerald-200 shadow-xl hover:-translate-y-2' : 'bg-slate-50 opacity-40 grayscale scale-95'}`}>
+                <div key={badge.id} className={`flex flex-col items-center p-8 rounded-[2.5rem] border transition-all duration-300 ${isEarned ? 'bg-white border-indigo-100 shadow-lg scale-100' : 'bg-slate-50 opacity-60 grayscale scale-95'}`}>
                   <span className="text-5xl mb-5 drop-shadow-md">{badge.icon}</span>
                   <span className="text-base font-black text-slate-900 mb-1">{badge.name}</span>
                   <div className="mt-6 w-full flex justify-center">
-                    {isEarned ? <span className="text-xs font-bold text-white bg-[#5B44F2] px-4 py-2.5 rounded-xl block text-center shadow-md w-full">보유 중</span> : canBuy ? <button onClick={() => handlePurchaseBadge(badge)} className="text-xs font-black text-white bg-emerald-500 hover:bg-emerald-600 px-4 py-2.5 rounded-xl block w-full text-center shadow-md active:scale-95 transition-all">결제하기</button> : <span className="text-xs font-bold text-slate-400 bg-slate-200 px-4 py-2.5 rounded-xl block text-center w-full">{badge.threshold}pt</span>}
+                    {isEarned ? (
+                      <span className="text-xs font-bold text-white bg-[#5B44F2] px-4 py-2.5 rounded-xl block text-center shadow-md w-full">보유 중</span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-slate-500 bg-slate-200 px-2 py-2.5 rounded-xl block text-center w-full tracking-tight break-keep">
+                        {badge.threshold}pt 자동 획득
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -174,7 +166,6 @@ export default function MyPage() {
 
         <div className="lg:col-span-12 bg-white border border-slate-200 shadow-sm rounded-[2rem] p-10 transition-all hover:shadow-2xl shadow-sm">
           <div className="flex justify-between items-center mb-8">
-            {/* '몰입 캘린더' -> '집중 캘린더' */}
             <h3 className="text-xl font-black text-slate-900 uppercase tracking-widest">{displayYear}년 {displayMonth + 1}월 집중 캘린더</h3>
             <div className="flex gap-2">
               <button onClick={() => setCalendarDate(new Date(displayYear, displayMonth - 1, 1))} className="px-5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-600 hover:bg-white transition-all shadow-sm">이전 달</button>
@@ -205,7 +196,7 @@ export default function MyPage() {
           <h3 className="text-xl font-black text-slate-900 mb-10 uppercase tracking-widest flex items-center gap-3"><span className="w-1.5 h-6 bg-emerald-400 rounded-full"></span>집중 목표 현황</h3>
           <div className="space-y-10 flex-grow">
             <div>
-              <div className="flex justify-between items-end mb-4"><span className="font-bold text-slate-700 text-sm">평균 집중도 목표 (90pt)</span><span className="font-black text-[#5B44F2] text-sm">{avgGoal}%</span></div>
+              <div className="flex justify-between items-end mb-4"><span className="font-bold text-slate-700 text-sm">평균 집중도 목표 (100%)</span><span className="font-black text-[#5B44F2] text-sm">{avgGoal}%</span></div>
               <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden shadow-inner"><div className="h-full bg-gradient-to-r from-emerald-400 to-[#5B44F2] transition-all duration-1000" style={{ width: `${avgGoal}%` }}></div></div>
             </div>
             <div>
