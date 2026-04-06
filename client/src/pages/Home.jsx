@@ -1,83 +1,80 @@
 import React from 'react';
 
-/* --- 기능 아이콘 컴포넌트 --- */
-const VisionIcon = () => (
-  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" />
-    <path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-    <circle cx="12" cy="12" r="3" /><path d="M7 12h10" /><path d="M12 7v10" />
-  </svg>
-);
-
-const SoundIcon = () => (
-  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 1v22" /><path d="M17 5v14" /><path d="M2 9v6" /><path d="M22 9v6" /><path d="M7 5v14" />
-  </svg>
-);
-
-const AnalysisIcon = () => (
-  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
-  </svg>
-);
-
+/**
+ * [홈페이지 - 드래그 시인성 보정 및 한국어 버전]
+ * - [수정] selection:text-indigo-900 추가로 드래그 시 글자 사라짐 현상 해결
+ * - 현경님의 시그니처 배경 링 애니메이션 및 하단 아이콘 가시성 유지
+ */
 export default function Home({ onStart }) {
   return (
-    <div className="flex items-center justify-center min-h-[85vh] p-6 animate-fade-in">
-      <div className="max-w-4xl w-full text-center p-12 py-20 md:p-20 md:py-28 bg-white border border-slate-200 shadow-2xl shadow-slate-200/50 rounded-[3.5rem] transition-all">
-        
-        <div className="inline-block px-6 py-2.5 bg-indigo-50 text-[#5B44F2] rounded-full font-black text-xs md:text-sm mb-10 tracking-[0.1em] shadow-sm border border-indigo-100 uppercase">
-          AI 자세 & 집중 코치
+    <div className="relative flex items-center justify-center min-h-[90vh] p-6 overflow-hidden bg-[#f8fafc] font-sans selection:bg-indigo-100">
+      
+      {/* 배경 장식: 팀 시안의 하이테크 링 애니메이션 */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+        <div className="w-[400px] h-[400px] border border-indigo-200/40 rounded-full animate-pulse-slow"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[650px] border border-indigo-100/30 rounded-full"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] border border-indigo-50/20 rounded-full"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-radial-indigo-glow opacity-40 blur-[80px]"></div>
+      </div>
+
+      <div className="relative z-10 max-w-4xl w-full text-center">
+        <div className="inline-block px-5 py-2 bg-white text-[#5B44F2] rounded-full font-black text-[10px] mb-8 tracking-[0.2em] border border-indigo-100 shadow-sm uppercase">
+          SMART FOCUS
         </div>
 
-        <h1 className="text-5xl md:text-7xl font-black text-slate-900 mb-10 leading-[1.1] tracking-tighter">
-          당신의 집중을 위한<br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#5B44F2] via-[#6366f1] to-[#818CF8]">
-            지능형 AI 코치
+        {/* --- [수정 포인트] selection:text-indigo-900 으로 드래그 시 가독성 확보 --- */}
+        <h1 className="text-6xl md:text-8xl font-black text-slate-900 mb-10 leading-[1.1] tracking-tighter drop-shadow-sm selection:text-indigo-900">
+          당신의 집중에<br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#5B44F2] via-[#7c3aed] to-[#818CF8] selection:text-indigo-600">
+            기술을 더하다
           </span>
         </h1>
 
-        <p className="text-slate-500 text-lg md:text-xl mb-14 leading-relaxed font-semibold break-keep max-w-2xl mx-auto">
-          복잡한 설정 없이 카메라만 켜세요. <br className="hidden md:block" />
-          실시간 자세 분석과 소음 탐지로 당신만의 완벽한 집중 환경을 만듭니다.
+        <p className="text-slate-500 text-lg md:text-xl mb-16 leading-relaxed font-bold max-w-2xl mx-auto opacity-80 break-keep selection:text-slate-900">
+          별도의 하드웨어 없이 카메라만 켜세요. <br className="hidden md:block" />
+          실시간 AI 자세 분석과 소음 탐지로 당신만의 완벽한 집중 환경을 만듭니다.
         </p>
 
-        <div className="flex justify-center">
+        <div className="flex justify-center mb-24">
           <button 
             onClick={onStart} 
-            className="group relative px-12 py-5 md:px-16 md:py-6 bg-[#5B44F2] text-white rounded-3xl font-black text-xl md:text-2xl shadow-2xl shadow-indigo-200 hover:bg-[#4a36c4] hover:-translate-y-1 active:scale-95 transition-all duration-300 overflow-hidden"
+            className="group relative px-16 py-6 bg-[#5B44F2] text-white rounded-[2.5rem] font-black text-2xl shadow-[0_20px_50px_-10px_rgba(91,68,242,0.5)] hover:bg-[#4a36c4] hover:-translate-y-1.5 transition-all duration-300 overflow-hidden"
           >
-            <span className="relative z-10 flex items-center gap-3">
+            <span className="relative z-10 flex items-center gap-4">
               지금 바로 시작하기
-              <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-7 h-7 group-hover:translate-x-2 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
             </span>
-            <div className="absolute top-0 -inset-full h-full w-1/2 z-5 block transform -skew-x-12 bg-gradient-to-r from-transparent to-white opacity-20 group-hover:animate-shine" />
+            <div className="absolute top-0 -inset-full h-full w-1/2 z-5 block transform -skew-x-12 bg-gradient-to-r from-transparent to-white/20 group-hover:animate-shine" />
           </button>
         </div>
 
-        <div className="mt-24 grid grid-cols-3 gap-4 max-w-lg mx-auto border-t border-slate-50 pt-12">
-          <div className="flex flex-col items-center gap-4 group">
-            <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-[#5B44F2] transition-all duration-300 border border-slate-100 shadow-sm">
-              <VisionIcon />
+        <div className="grid grid-cols-3 gap-10 max-w-2xl mx-auto border-t border-slate-100 pt-16">
+          {[
+            { label: '정밀 자세 분석', icon: "M5 13l4 4L19 7" },
+            { label: '실시간 소음 관리', icon: "M12 1v22M17 5v14M2 9v6M22 9v6M7 5v14" },
+            { label: 'AI 맞춤 리포트', icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2" }
+          ].map((item, i) => (
+            <div key={i} className="flex flex-col items-center gap-4 group cursor-default">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 text-[#5B44F2] flex items-center justify-center shadow-sm transition-all duration-300 group-hover:bg-[#5B44F2] group-hover:text-white group-hover:shadow-lg group-hover:-translate-y-1.5">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                </svg>
+              </div>
+              <span className="text-[11px] font-black text-[#5B44F2] tracking-widest uppercase opacity-90">{item.label}</span>
             </div>
-            <span className="text-[11px] font-black text-slate-400 tracking-widest uppercase group-hover:text-slate-600 transition-colors">자세 교정 AI</span>
-          </div>
-          <div className="flex flex-col items-center gap-4 group border-x border-slate-100 px-4">
-            <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-[#5B44F2] transition-all duration-300 border border-slate-100 shadow-sm">
-              <SoundIcon />
-            </div>
-            <span className="text-[11px] font-black text-slate-400 tracking-widest uppercase group-hover:text-slate-600 transition-colors">환경 소음 차단</span>
-          </div>
-          <div className="flex flex-col items-center gap-4 group">
-            <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-[#5B44F2] transition-all duration-300 border border-slate-100 shadow-sm">
-              <AnalysisIcon />
-            </div>
-            <span className="text-[11px] font-black text-slate-400 tracking-widest uppercase group-hover:text-slate-600 transition-colors">집중 데이터 분석</span>
-          </div>
+          ))}
         </div>
       </div>
+      
+      <style>{`
+        @keyframes shine { 100% { left: 200%; } }
+        .animate-shine { animation: shine 1.5s infinite; }
+        .bg-radial-indigo-glow { background: radial-gradient(circle, rgba(91,68,242,0.15) 0%, transparent 70%); }
+        @keyframes pulse-slow { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.05); } }
+        .animate-pulse-slow { animation: pulse-slow 5s ease-in-out infinite; }
+      `}</style>
     </div>
   );
 }
