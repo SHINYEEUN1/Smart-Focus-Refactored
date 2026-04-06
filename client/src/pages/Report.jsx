@@ -27,7 +27,6 @@ const POSE_DETAIL_MAP = {
   'TURNING_HEAD': { label: '시선 이탈', color: 'text-indigo-600', bg: 'bg-indigo-50' },
   'PHONE_USAGE': { label: '스마트폰 사용', color: 'text-slate-600', bg: 'bg-slate-50' },
   'NORMAL': { label: '정상 자세', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  /* 추가된 영문 식별자 한국어 패치 */
   'HAND_NEAR_FACE_CAUTION': { label: '얼굴 주변 손 감지', color: 'text-amber-600', bg: 'bg-amber-50' },
   'SLUMPED_WARNING': { label: '구부정한 자세 위험', color: 'text-rose-600', bg: 'bg-rose-50' },
   'SLUMPED_CAUTION': { label: '자세 낮아짐 주의', color: 'text-amber-600', bg: 'bg-amber-50' },
@@ -57,6 +56,9 @@ export default function Report() {
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
+    /* [수정] React StrictMode 중복 API 호출 방지를 위한 마운트 플래그 적용 */
+    let isMounted = true; 
+
     const fetchAllData = async () => {
       try {
         setIsLoading(true);
@@ -66,17 +68,22 @@ export default function Report() {
 
         if (!isDetailsMode) {
           const historyResult = await immersionApi.getHistory(user_idx);
-          if (historyResult && historyResult.success) setFullHistory(historyResult.data || []);
-          setIsLoading(false);
+          if (isMounted && historyResult && historyResult.success) {
+            setFullHistory(historyResult.data || []);
+          }
+          if (isMounted) setIsLoading(false);
           return;
         }
 
         const reportResult = await immersionApi.getReportDetail(imm_idx);
 
-        if (reportResult && reportResult.success && reportResult.data) {
+        if (isMounted && reportResult && reportResult.success && reportResult.data) {
           const { session, noise_summary, pose_summary, chart_data } = reportResult.data;
 
-          if (!session) { setIsLoading(false); return; }
+          if (!session) { 
+            if (isMounted) setIsLoading(false); 
+            return; 
+          }
 
           const totalSecs = session.total_seconds || 0;
           const hrs = Math.floor(totalSecs / 3600).toString().padStart(2, '0');
@@ -124,7 +131,6 @@ export default function Report() {
                 if (!session.ai_feedback) return { raw: "분석된 피드백 데이터가 존재하지 않습니다." };
                 try {
                   const parsed = JSON.parse(session.ai_feedback);
-                  // JSON 파싱 후 객체 형태를 그대로 렌더링 영역으로 전달 (항목별 분리용)
                   if (typeof parsed === 'object' && parsed !== null) {
                     return parsed;
                   }
@@ -141,9 +147,15 @@ export default function Report() {
             }
           });
         }
-      } catch (err) { console.error("리포트 조회 에러", err); } finally { setIsLoading(false); }
+      } catch (err) { 
+        console.error("리포트 조회 에러", err); 
+      } finally { 
+        if (isMounted) setIsLoading(false); 
+      }
     };
     fetchAllData();
+
+    return () => { isMounted = false; };
   }, [imm_idx, navigate, isDetailsMode]);
 
   const handleExportPDF = async () => {
@@ -224,6 +236,18 @@ export default function Report() {
             </div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  /* [수정] 데이터가 로드되지 않았을 때의 예외 처리 (크래시 방지) */
+  if (isDetailsMode && !reportData) {
+    return (
+      <div className="min-h-[85vh] flex flex-col items-center justify-center gap-5 animate-fade-in">
+        <p className="text-slate-500 font-bold text-lg tracking-tight">리포트 데이터를 정상적으로 불러오지 못했습니다.</p>
+        <button onClick={() => navigate('/report')} className="px-6 py-2.5 bg-[#5B44F2] text-white rounded-xl font-bold shadow-md hover:bg-[#4a36c4] transition-colors">
+          보관함으로 돌아가기
+        </button>
       </div>
     );
   }
@@ -326,7 +350,8 @@ export default function Report() {
                     </div>
 
                     <div className="flex flex-wrap gap-2 mt-1">
-                      {reportData.summary.aiFeedback.집중태그.split(' ').map((tag, idx) => {
+                      {/* [수정] 태그 데이터가 없거나 undefined 일 때 split() 에러 크래시 방지 */}
+                      {(reportData.summary.aiFeedback.집중태그 || '').split(' ').map((tag, idx) => {
                         if(!tag.trim()) return null;
                         return (
                           <span key={idx} className="px-3.5 py-1.5 bg-[#4a36c4] border border-indigo-400/50 rounded-full text-xs font-bold text-indigo-100 shadow-sm">
