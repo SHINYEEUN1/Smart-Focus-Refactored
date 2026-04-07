@@ -3,8 +3,8 @@ import { authApi } from '../shared/api';
 
 /**
  * [회원가입 페이지]
- * - 닉네임 중복 검사 로직
- * - 이메일 인증 번호 발송 및 유효성 검증 체인 구성
+ * - 다크모드 전역 테마 동기화 완료
+ * - 닉네임 중복 검사 로직 및 이메일 인증 체인 구성
  * - 회원가입 성공 시 자동 로그인 및 대시보드 리다이렉트
  */
 export default function SignUp({ onNavigate, setIsLoggedIn }) {
@@ -78,49 +78,49 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] p-6 font-sans">
-      <div className="w-full max-w-[500px] bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-10 md:p-12 animate-fade-in">
-        <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tighter">회원가입</h1>
-        <p className="text-sm font-bold text-slate-400 mb-8 px-1">포커스 러너의 여정을 시작해보세요.</p>
+    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-transparent p-6 font-sans transition-colors duration-300">
+      <div className="w-full max-w-[500px] bg-white dark:bg-slate-900/80 rounded-[2.5rem] shadow-2xl border border-slate-100 dark:border-slate-800 p-10 md:p-12 animate-fade-in backdrop-blur-md transition-all">
+        <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2 tracking-tighter transition-colors">회원가입</h1>
+        <p className="text-sm font-bold text-slate-400 dark:text-slate-500 mb-8 px-1">포커스 러너의 여정을 시작해보세요.</p>
 
         <form className="space-y-5" onSubmit={handleSignUp}>
           <div>
-            <label className="text-xs font-black text-slate-700 uppercase tracking-widest block mb-2 px-1">닉네임</label>
+            <label className="text-xs font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest block mb-2 px-1">닉네임</label>
             <div className="flex gap-2">
-              <input type="text" value={nick} onChange={(e) => { setNick(e.target.value); setIsNickChecked(false); }} className="flex-1 px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-[#5B44F2] transition-all font-bold text-sm" placeholder="닉네임 입력" required />
-              <button type="button" onClick={handleNickCheck} className={`px-4 py-3.5 rounded-xl font-black text-xs transition-all ${isNickChecked ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-800 text-white hover:bg-slate-700'}`}>{isNickChecked ? '체크완료' : '중복확인'}</button>
+              <input type="text" value={nick} onChange={(e) => { setNick(e.target.value); setIsNickChecked(false); }} className="flex-1 px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 transition-all font-bold text-sm text-slate-900 dark:text-white" placeholder="닉네임 입력" required />
+              <button type="button" onClick={handleNickCheck} className={`px-4 py-3.5 rounded-xl font-black text-xs transition-all ${isNickChecked ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50' : 'bg-slate-800 text-white hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600'}`}>{isNickChecked ? '체크완료' : '중복확인'}</button>
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-black text-slate-700 uppercase tracking-widest block mb-2 px-1">이메일 인증</label>
+            <label className="text-xs font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest block mb-2 px-1">이메일 인증</label>
             <div className="flex gap-2 mb-2">
-              <input type="email" value={email} disabled={isVerified} onChange={(e) => setEmail(e.target.value)} className="flex-1 px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-[#5B44F2] transition-all font-bold text-sm disabled:opacity-50" placeholder="your@email.com" required />
-              <button type="button" onClick={handleSendEmail} disabled={isVerified} className="px-4 py-3.5 bg-slate-800 text-white rounded-xl font-black text-xs hover:bg-slate-700 transition-all">코드발송</button>
+              <input type="email" value={email} disabled={isVerified} onChange={(e) => setEmail(e.target.value)} className="flex-1 px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 transition-all font-bold text-sm disabled:opacity-50 text-slate-900 dark:text-white" placeholder="your@email.com" required />
+              <button type="button" onClick={handleSendEmail} disabled={isVerified} className="px-4 py-3.5 bg-slate-800 text-white rounded-xl font-black text-xs hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 transition-all">코드발송</button>
             </div>
             {isEmailSent && !isVerified && (
               <div className="flex gap-2 animate-fade-in">
-                <input type="text" value={authCode} onChange={(e) => setAuthCode(e.target.value)} className="flex-1 px-5 py-3.5 bg-indigo-50 border border-indigo-100 rounded-2xl outline-none font-bold text-sm" placeholder="인증코드 6자리" required />
+                <input type="text" value={authCode} onChange={(e) => setAuthCode(e.target.value)} className="flex-1 px-5 py-3.5 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800/50 rounded-2xl outline-none font-bold text-sm text-slate-900 dark:text-white" placeholder="인증코드 6자리" required />
                 <button type="button" onClick={handleVerifyCode} className="px-4 py-3.5 bg-[#5B44F2] text-white rounded-xl font-black text-xs shadow-md">확인</button>
               </div>
             )}
-            {isVerified && <p className="text-[11px] text-emerald-600 font-bold px-1 mt-1">✓ 이메일 인증이 완료되었습니다.</p>}
+            {isVerified && <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold px-1 mt-1 transition-colors">✓ 이메일 인증이 완료되었습니다.</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-black text-slate-700 uppercase tracking-widest block mb-2 px-1">비밀번호</label>
-              <input type="password" name="pwd" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-[#5B44F2] font-bold text-sm" placeholder="8자 이상" minLength="8" required />
+              <label className="text-xs font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest block mb-2 px-1">비밀번호</label>
+              <input type="password" name="pwd" className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 font-bold text-sm text-slate-900 dark:text-white" placeholder="8자 이상" minLength="8" required />
             </div>
             <div>
-              <label className="text-xs font-black text-slate-700 uppercase tracking-widest block mb-2 px-1">비밀번호 확인</label>
-              <input type="password" name="pwdConfirm" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-[#5B44F2] font-bold text-sm" placeholder="다시 입력" required />
+              <label className="text-xs font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest block mb-2 px-1">비밀번호 확인</label>
+              <input type="password" name="pwdConfirm" className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 font-bold text-sm text-slate-900 dark:text-white" placeholder="다시 입력" required />
             </div>
           </div>
 
           <button type="submit" className="w-full py-4 bg-[#5B44F2] text-white rounded-2xl font-black shadow-lg hover:bg-[#4a36c4] active:scale-[0.98] transition-all mt-4">포커스 러너 가입하기</button>
         </form>
-        <button onClick={() => onNavigate('login')} className="w-full mt-6 text-xs font-bold text-slate-400 hover:text-[#5B44F2] transition-colors underline underline-offset-4">이미 계정이 있으신가요? 로그인</button>
+        <button onClick={() => onNavigate('login')} className="w-full mt-6 text-xs font-bold text-slate-400 dark:text-slate-500 hover:text-[#5B44F2] dark:hover:text-indigo-400 transition-colors underline underline-offset-4">이미 계정이 있으신가요? 로그인</button>
       </div>
     </div>
   );

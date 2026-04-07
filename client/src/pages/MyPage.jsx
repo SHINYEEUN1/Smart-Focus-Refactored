@@ -4,15 +4,13 @@ import { immersionApi, authApi } from '../shared/api';
 
 /**
  * [마이페이지 - 대시보드 및 사용자 설정]
- * - 사용자 프로필(이미지, 레벨, 닉네임) 조회 및 수정 기능
- * - 포인트 연동형 뱃지 컬렉션 (수동 결제 -> 자동 획득 방식으로 UX 개선)
- * - 월간 집중 캘린더 및 일별 성취도(%) 트래킹
- * - 환경 설정 (소음 임계치 조정, 알림 토글) 및 상태 로컬 스토리지 동기화
+ * - 사용자 프로필, 뱃지 컬렉션, 월간 집중 캘린더 조회 기능
+ * - 전역 다크모드 테마 토글 등 시스템 환경 설정 제어
+ * - [UI 최적화] 라이트/다크 모드 양방향 텍스트 대비(Contrast) 및 폰트 가시성 개선
  */
 const UserIcon = () => <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
 const CameraIcon = () => <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
 
-/* 뱃지 획득 기준 데이터 정의 */
 const BADGE_GUIDE = [
   { id: 'starter', name: '초보 집중러', threshold: 100, icon: '🌱' },
   { id: 'bronze', name: '브론즈 뱃지', threshold: 500, icon: '🥉' },
@@ -21,8 +19,7 @@ const BADGE_GUIDE = [
   { id: 'platinum', name: '플래티넘 뱃지', threshold: 5000, icon: '💎' }
 ];
 
-export default function MyPage() {
-  /* (Hook 선언부 - 기존 코드 유지) */
+export default function MyPage({ isDarkMode, setIsDarkMode }) {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const userInfoStr = localStorage.getItem('user_info');
@@ -42,7 +39,6 @@ export default function MyPage() {
   const [calendarDate, setCalendarDate] = useState(new Date());
 
   const handleImageClick = () => fileInputRef.current.click();
-  /* 프로필 이미지 변경 핸들러 (서버 업로드 및 로컬 상태 동기화) */
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -62,7 +58,6 @@ export default function MyPage() {
     } catch (err) { alert("이미지 업로드 실패"); }
   };
 
-  /* 초기 데이터 패칭: 통계(Stats) 및 누적 기록(History) 병렬 요청 */
   useEffect(() => {
     if (!userInfo) { navigate('/login'); return; }
     const fetchAllData = async () => {
@@ -80,20 +75,17 @@ export default function MyPage() {
     fetchAllData();
   }, [userInfo?.user_idx, navigate]);
 
-  /* 사용자 환경 설정값 변경 시 로컬 스토리지 자동 동기화 */
   useEffect(() => {
     localStorage.setItem('smart_focus_noise_db', noiseThreshold);
     localStorage.setItem('setting_sound_alert', isSoundAlert);
     localStorage.setItem('setting_weekly_report', isWeeklyReport);
   }, [noiseThreshold, isSoundAlert, isWeeklyReport]);
 
-  if (isLoading) return <div className="min-h-[85vh] flex flex-col items-center justify-center gap-4"><div className="w-12 h-12 border-4 border-[#5B44F2] border-t-transparent rounded-full animate-spin"></div><p className="text-slate-500 font-black animate-pulse">개인 대시보드를 불러오는 중...</p></div>; // ... (로딩 상태 처리 유지)
+  if (isLoading) return <div className="min-h-[85vh] flex flex-col items-center justify-center gap-4"><div className="w-12 h-12 border-4 border-[#5B44F2] border-t-transparent rounded-full animate-spin"></div><p className="text-slate-600 dark:text-slate-400 font-black animate-pulse transition-colors">개인 대시보드를 불러오는 중...</p></div>;
 
-  /* 사용자 누적 포인트를 기반으로 현재 레벨 및 잔여 경험치 계산 로직 */
   const currentLevel = Math.floor((pageData.stats?.total_points || 0) / 500) + 1;
   const levelExp = (pageData.stats?.total_points || 0) % 500;
 
-  /* 달력 렌더링을 위한 날짜 배열 생성 로직 */
   const displayYear = calendarDate.getFullYear(); const displayMonth = calendarDate.getMonth();
   const daysInMonthCount = new Date(displayYear, displayMonth + 1, 0).getDate();
   const blankDays = Array.from({ length: new Date(displayYear, displayMonth, 1).getDay() }, (_, i) => i);
@@ -106,60 +98,62 @@ export default function MyPage() {
   const avgGoal = Math.min(100, Math.round(((pageData.stats?.avg_score || 0) / 90) * 100));
 
   return (
-    <div className="max-w-[1200px] mx-auto pt-12 pb-24 px-6 md:px-10 font-sans text-slate-900 animate-fade-in selection:bg-indigo-100">
+    <div className="max-w-[1200px] mx-auto pt-12 pb-24 px-6 md:px-10 font-sans text-slate-900 dark:text-slate-100 animate-fade-in selection:bg-indigo-100 dark:selection:bg-indigo-900/50 transition-colors">
       <header className="mb-12">
-        <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tighter uppercase">나의 집중 대시보드</h1>
-        <p className="text-slate-500 font-semibold text-lg">성장 데이터와 뱃지 컬렉션을 한눈에 관리하세요.</p>
+        <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-2 tracking-tighter uppercase transition-colors">나의 집중 대시보드</h1>
+        <p className="text-slate-600 dark:text-slate-400 font-semibold text-lg transition-colors">성장 데이터와 뱃지 컬렉션을 한눈에 관리하세요.</p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-slate-900">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-slate-900 dark:text-slate-100 transition-colors">
         
-        <div className="lg:col-span-12 bg-white border border-slate-200 rounded-[2.5rem] p-10 flex flex-col md:flex-row justify-between items-center transition-all hover:shadow-2xl shadow-sm">
+        {/* 상단 프로필 및 포인트 카드 */}
+        <div className="lg:col-span-12 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-10 flex flex-col md:flex-row justify-between items-center transition-all hover:shadow-2xl shadow-sm backdrop-blur-sm">
           <div className="flex flex-col md:flex-row items-center gap-10 text-center md:text-left relative">
-            <div onClick={handleImageClick} className="relative w-32 h-32 bg-slate-50 border border-slate-200 rounded-[2.5rem] flex items-center justify-center text-slate-400 overflow-hidden cursor-pointer shadow-sm group">
+            <div onClick={handleImageClick} className="relative w-32 h-32 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[2.5rem] flex items-center justify-center text-slate-400 overflow-hidden cursor-pointer shadow-sm group">
               {profileImg ? <img src={profileImg} className="w-full h-full object-cover" alt="프로필" /> : <UserIcon />}
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><CameraIcon className="text-white"/></div>
             </div>
             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
             <div>
               <div className="flex gap-2 mb-4 justify-center md:justify-start">
-                <span className="px-3 py-1 bg-[#5B44F2] text-white text-[10px] font-black rounded-lg uppercase tracking-wider">레벨 {currentLevel}</span>
-                <span className="px-3 py-1 bg-indigo-50 text-[#5B44F2] text-xs font-black rounded-lg border border-indigo-100 uppercase tracking-widest">포커스 러너</span>
+                <span className="px-3 py-1 bg-[#5B44F2] text-white text-xs font-black rounded-lg uppercase tracking-wider">레벨 {currentLevel}</span>
+                <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/50 text-[#5B44F2] dark:text-indigo-300 text-xs font-black rounded-lg border border-indigo-200 dark:border-indigo-800/50 uppercase tracking-widest">포커스 러너</span>
               </div>
-              <h2 className="text-4xl font-black mb-1 tracking-tight">{userInfo?.nick}님</h2>
-              <p className="text-slate-500 font-semibold">{userInfo?.email}</p>
+              <h2 className="text-4xl font-black mb-1 tracking-tight dark:text-white">{userInfo?.nick}님</h2>
+              <p className="text-slate-600 dark:text-slate-400 text-base font-semibold">{userInfo?.email}</p>
             </div>
           </div>
-          <div className="mt-10 md:mt-0 text-center md:text-right md:pl-16 md:border-l-2 border-slate-100">
-            <div className="text-sm font-bold text-slate-400 mb-2 uppercase tracking-widest">누적 포인트</div>
-            <div className="text-6xl font-black text-[#5B44F2] mb-5 tracking-tighter">{(pageData.stats?.total_points || 0).toLocaleString()} pt</div>
-            <div className="w-56 bg-slate-100 h-2.5 rounded-full overflow-hidden mb-3 shadow-inner">
-              <div className="bg-[#5B44F2] h-full transition-all duration-1000 ease-out" style={{ width: `${(levelExp / 500) * 100}%` }}></div>
+          <div className="mt-10 md:mt-0 text-center md:text-right md:pl-16 md:border-l-2 border-slate-200 dark:border-slate-800/80">
+            <div className="text-base font-bold text-slate-600 dark:text-slate-400 mb-2 uppercase tracking-widest">누적 포인트</div>
+            <div className="text-[4rem] leading-none font-black text-[#5B44F2] dark:text-indigo-400 mb-5 tracking-tighter">{(pageData.stats?.total_points || 0).toLocaleString()} pt</div>
+            <div className="w-56 bg-slate-100 dark:bg-slate-800/80 h-3 rounded-full overflow-hidden mb-3 shadow-inner border border-slate-200 dark:border-none">
+              <div className="bg-[#5B44F2] dark:bg-indigo-500 h-full transition-all duration-1000 ease-out" style={{ width: `${(levelExp / 500) * 100}%` }}></div>
             </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">다음 레벨까지: {500 - levelExp} pt 남음</p>
+            <p className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">다음 레벨까지: {500 - levelExp} pt 남음</p>
           </div>
         </div>
 
-        <div className="lg:col-span-12 bg-white border border-slate-200 rounded-[2rem] p-10 transition-all hover:shadow-2xl shadow-sm">
-          <div className="flex justify-between items-center mb-10 pb-4 border-b border-slate-50">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-indigo-50 text-[#5B44F2] rounded-2xl flex items-center justify-center shadow-sm font-bold text-xl">🏆</div>
-              <h3 className="text-2xl font-bold tracking-tight">집중 뱃지 컬렉션</h3>
+        {/* 뱃지 컬렉션 */}
+        <div className="lg:col-span-12 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-10 transition-all hover:shadow-2xl shadow-sm backdrop-blur-sm">
+          <div className="flex justify-between items-center mb-10 pb-5 border-b border-slate-200 dark:border-slate-800/60">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/40 text-[#5B44F2] dark:text-indigo-400 rounded-2xl flex items-center justify-center shadow-sm font-bold text-2xl border border-indigo-100 dark:border-none">🏆</div>
+              <h3 className="text-2xl font-bold tracking-tight dark:text-white">집중 뱃지 컬렉션</h3>
             </div>
-            <span className="text-sm font-black text-[#5B44F2] bg-indigo-50 px-6 py-3 rounded-2xl border border-indigo-100 shadow-inner">보유 포인트: {(pageData.stats?.total_points || 0).toLocaleString()} pt</span>
+            <span className="text-sm font-black text-[#5B44F2] dark:text-indigo-200 bg-indigo-50 dark:bg-indigo-900/50 px-6 py-3.5 rounded-2xl border border-indigo-200 dark:border-indigo-700/50 shadow-inner">보유 포인트: {(pageData.stats?.total_points || 0).toLocaleString()} pt</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
             {BADGE_GUIDE.map((badge, idx) => {
               const isEarned = (pageData.stats?.badge_count || 0) > idx;
               return (
-                <div key={badge.id} className={`flex flex-col items-center p-8 rounded-[2.5rem] border transition-all duration-300 ${isEarned ? 'bg-white border-indigo-100 shadow-lg scale-100' : 'bg-slate-50 opacity-60 grayscale scale-95'}`}>
-                  <span className="text-5xl mb-5 drop-shadow-md">{badge.icon}</span>
-                  <span className="text-base font-black text-slate-900 mb-1">{badge.name}</span>
+                <div key={badge.id} className={`flex flex-col items-center p-8 rounded-[2.5rem] border transition-all duration-300 ${isEarned ? 'bg-white dark:bg-slate-800 border-indigo-200 dark:border-indigo-500/40 shadow-lg scale-100' : 'bg-slate-100/50 dark:bg-slate-800/60 opacity-80 grayscale-[60%] scale-95 border-slate-200 dark:border-slate-700'}`}>
+                  <span className="text-5xl mb-6 drop-shadow-md">{badge.icon}</span>
+                  <span className={`text-lg font-black mb-1 ${isEarned ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>{badge.name}</span>
                   <div className="mt-6 w-full flex justify-center">
                     {isEarned ? (
-                      <span className="text-xs font-bold text-white bg-[#5B44F2] px-4 py-2.5 rounded-xl block text-center shadow-md w-full">보유 중</span>
+                      <span className="text-sm font-bold text-white bg-[#5B44F2] px-4 py-2.5 rounded-xl block text-center shadow-md w-full">보유 중</span>
                     ) : (
-                      <span className="text-[11px] font-bold text-slate-500 bg-slate-200 px-2 py-2.5 rounded-xl block text-center w-full tracking-tight break-keep">
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-700/80 px-2 py-2.5 rounded-xl block text-center w-full tracking-tight break-keep border border-slate-300/50 dark:border-slate-600/50">
                         {badge.threshold}pt 자동 획득
                       </span>
                     )}
@@ -170,27 +164,28 @@ export default function MyPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-12 bg-white border border-slate-200 shadow-sm rounded-[2rem] p-10 transition-all hover:shadow-2xl shadow-sm">
+        {/* 캘린더 영역 */}
+        <div className="lg:col-span-12 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-10 transition-all hover:shadow-2xl shadow-sm backdrop-blur-sm">
           <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xl font-black text-slate-900 uppercase tracking-widest">{displayYear}년 {displayMonth + 1}월 집중 캘린더</h3>
+            <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-widest">{displayYear}년 {displayMonth + 1}월 집중 캘린더</h3>
             <div className="flex gap-2">
-              <button onClick={() => setCalendarDate(new Date(displayYear, displayMonth - 1, 1))} className="px-5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-600 hover:bg-white transition-all shadow-sm">이전 달</button>
-              <button onClick={() => setCalendarDate(new Date(displayYear, displayMonth + 1, 1))} className="px-5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-600 hover:bg-white transition-all shadow-sm">다음 달</button>
+              <button onClick={() => setCalendarDate(new Date(displayYear, displayMonth - 1, 1))} className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-black text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-sm">이전 달</button>
+              <button onClick={() => setCalendarDate(new Date(displayYear, displayMonth + 1, 1))} className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-black text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shadow-sm">다음 달</button>
             </div>
           </div>
-          <div className="border border-slate-100 rounded-[1.5rem] overflow-hidden bg-slate-50/30">
-            <div className="grid grid-cols-7 bg-slate-100/50 text-center font-black text-[10px] text-slate-400 py-4 border-b border-slate-100 uppercase">
+          <div className="border border-slate-200 dark:border-slate-700/60 rounded-[1.5rem] overflow-hidden bg-slate-50/50 dark:bg-slate-900/40">
+            <div className="grid grid-cols-7 bg-slate-100 dark:bg-slate-800/80 text-center font-black text-xs text-slate-600 dark:text-slate-400 py-4 border-b border-slate-200 dark:border-slate-700/60 uppercase">
               {['일', '월', '화', '수', '목', '금', '토'].map(d => <span key={d}>{d}</span>)}
             </div>
             <div className="grid grid-cols-7">
-              {blankDays.map(i => <div key={`b-${i}`} className="min-h-[100px] border-b border-r border-slate-100 bg-slate-50/20"></div>)}
+              {blankDays.map(i => <div key={`b-${i}`} className="min-h-[110px] border-b border-r border-slate-200 dark:border-slate-800/60 bg-slate-100/50 dark:bg-slate-800/20"></div>)}
               {daysInMonth.map(day => {
                 const isRec = recordedDaysThisMonth.includes(day);
                 const isToday = new Date().getDate() === day && new Date().getMonth() === displayMonth;
                 return (
-                  <div key={day} className={`min-h-[100px] border-b border-r border-slate-100 p-3 flex flex-col items-center justify-between transition-colors ${isRec ? 'bg-indigo-50/40' : 'bg-white hover:bg-slate-50'}`}>
-                    <span className={`text-xs font-black w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-[#5B44F2] text-white shadow-lg' : 'text-slate-400'}`}>{day}</span>
-                    {isRec && <div className="bg-[#5B44F2] text-white text-[9px] font-black px-2 py-1 rounded-lg shadow-sm animate-fade-in">✓ 집중</div>}
+                  <div key={day} className={`min-h-[110px] border-b border-r border-slate-200 dark:border-slate-800/60 p-3 flex flex-col items-center justify-between transition-colors ${isRec ? 'bg-indigo-50/80 dark:bg-indigo-900/20' : 'bg-white dark:bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40'}`}>
+                    <span className={`text-sm font-black w-8 h-8 flex items-center justify-center rounded-full ${isToday ? 'bg-[#5B44F2] text-white shadow-lg' : 'text-slate-700 dark:text-slate-300'}`}>{day}</span>
+                    {isRec && <div className="bg-[#5B44F2] dark:bg-indigo-500 text-white text-[10px] font-black px-2.5 py-1 rounded-lg shadow-sm animate-fade-in">✓ 집중</div>}
                   </div>
                 );
               })}
@@ -198,48 +193,65 @@ export default function MyPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-4 bg-white border border-slate-200 shadow-sm rounded-[2rem] p-10 transition-all hover:shadow-2xl shadow-sm flex flex-col h-full">
-          <h3 className="text-xl font-black text-slate-900 mb-10 uppercase tracking-widest flex items-center gap-3"><span className="w-1.5 h-6 bg-emerald-400 rounded-full"></span>집중 목표 현황</h3>
+        {/* 집중 목표 현황 및 최근 집중 세션 */}
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-sm rounded-[2rem] p-10 transition-all hover:shadow-2xl flex flex-col h-full backdrop-blur-sm">
+          <h3 className="text-xl font-black text-slate-900 dark:text-white mb-10 uppercase tracking-widest flex items-center gap-3"><span className="w-1.5 h-6 bg-emerald-400 rounded-full"></span>집중 목표 현황</h3>
           <div className="space-y-10 flex-grow">
             <div>
-              <div className="flex justify-between items-end mb-4"><span className="font-bold text-slate-700 text-sm">평균 집중도 목표 (100%)</span><span className="font-black text-[#5B44F2] text-sm">{avgGoal}%</span></div>
-              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden shadow-inner"><div className="h-full bg-gradient-to-r from-emerald-400 to-[#5B44F2] transition-all duration-1000" style={{ width: `${avgGoal}%` }}></div></div>
+              <div className="flex justify-between items-end mb-4"><span className="font-bold text-slate-700 dark:text-slate-300 text-base">평균 집중도 목표 (100%)</span><span className="font-black text-[#5B44F2] dark:text-indigo-400 text-base">{avgGoal}%</span></div>
+              <div className="w-full h-3 bg-slate-100 dark:bg-slate-800/80 rounded-full overflow-hidden shadow-inner border border-slate-200 dark:border-none"><div className="h-full bg-gradient-to-r from-emerald-400 to-[#5B44F2] transition-all duration-1000" style={{ width: `${avgGoal}%` }}></div></div>
             </div>
             <div>
-              <div className="flex justify-between items-end mb-4"><span className="font-bold text-slate-700 text-sm">주간 측정 횟수 (10회)</span><span className="font-black text-[#5B44F2] text-sm">{pageData.stats?.total_sessions || 0}/10</span></div>
-              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden shadow-inner"><div className="h-full bg-gradient-to-r from-indigo-300 to-[#5B44F2] transition-all duration-1000" style={{ width: `${Math.min(100, (pageData.stats?.total_sessions || 0) * 10)}%` }}></div></div>
+              <div className="flex justify-between items-end mb-4"><span className="font-bold text-slate-700 dark:text-slate-300 text-base">주간 측정 횟수 (10회)</span><span className="font-black text-[#5B44F2] dark:text-indigo-400 text-base">{pageData.stats?.total_sessions || 0}/10</span></div>
+              <div className="w-full h-3 bg-slate-100 dark:bg-slate-800/80 rounded-full overflow-hidden shadow-inner border border-slate-200 dark:border-none"><div className="h-full bg-gradient-to-r from-indigo-400 to-[#5B44F2] transition-all duration-1000" style={{ width: `${Math.min(100, (pageData.stats?.total_sessions || 0) * 10)}%` }}></div></div>
             </div>
           </div>
         </div>
 
-        <div className="lg:col-span-8 bg-white border border-slate-200 shadow-sm rounded-[2rem] p-10 transition-all hover:shadow-2xl shadow-sm h-full flex flex-col overflow-hidden">
-          <h3 className="text-xl font-black text-slate-900 mb-8 uppercase tracking-widest flex items-center gap-3"><span className="w-1.5 h-6 bg-[#5B44F2] rounded-full"></span>최근 집중 세션</h3>
+        <div className="lg:col-span-8 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-sm rounded-[2rem] p-10 transition-all hover:shadow-2xl h-full flex flex-col overflow-hidden backdrop-blur-sm">
+          <h3 className="text-xl font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest flex items-center gap-3"><span className="w-1.5 h-6 bg-[#5B44F2] dark:bg-indigo-400 rounded-full"></span>최근 집중 세션</h3>
           <div className="flex flex-col gap-4 overflow-y-auto max-h-[350px] pr-2 custom-scrollbar">
-            {pageData.history.length === 0 ? <div className="py-20 text-center text-slate-400 font-bold">집중 기록이 존재하지 않습니다.</div> : pageData.history.map((s, i) => (
-              <div key={i} onClick={() => navigate(`/report/${s.imm_idx}`)} className="flex justify-between items-center p-6 bg-slate-50 border border-slate-100 rounded-3xl cursor-pointer hover:bg-white hover:border-[#5B44F2]/30 transition-all group shrink-0 shadow-sm">
-                <div className="flex flex-col gap-1.5"><span className="font-black text-slate-900 text-lg group-hover:text-[#5B44F2] transition-colors">{new Date(s.imm_date).toLocaleDateString()} 리포트</span><span className="text-xs font-bold text-slate-400 uppercase tracking-widest">시작 시각: {s.start_time?.substring(0, 5)} | 집중 시간: {s.formatted_time || '0분'}</span></div>
-                <div className="text-2xl font-black text-[#5B44F2] bg-white px-5 py-2.5 rounded-2xl border border-indigo-50 shadow-inner group-hover:bg-[#5B44F2] group-hover:text-white transition-colors">{s.imm_score}pt</div>
+            {pageData.history.length === 0 ? <div className="py-20 text-center text-slate-500 dark:text-slate-500 font-bold">집중 기록이 존재하지 않습니다.</div> : pageData.history.map((s, i) => (
+              <div key={i} onClick={() => navigate(`/report/${s.imm_idx}`)} className="flex justify-between items-center p-6 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-3xl cursor-pointer hover:bg-white dark:hover:bg-slate-800 hover:border-[#5B44F2]/50 dark:hover:border-indigo-500/30 transition-all group shrink-0 shadow-sm">
+                <div className="flex flex-col gap-1.5"><span className="font-black text-slate-900 dark:text-slate-100 text-lg group-hover:text-[#5B44F2] dark:group-hover:text-indigo-400 transition-colors">{new Date(s.imm_date).toLocaleDateString()} 리포트</span><span className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">시작 시각: {s.start_time?.substring(0, 5)} | 집중 시간: {s.formatted_time || '0분'}</span></div>
+                <div className="text-2xl font-black text-[#5B44F2] dark:text-indigo-300 bg-white dark:bg-slate-900 px-5 py-2.5 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-inner group-hover:bg-[#5B44F2] dark:group-hover:bg-indigo-500 group-hover:text-white dark:group-hover:text-white transition-colors">{s.imm_score}pt</div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="lg:col-span-12 bg-white border border-slate-200 shadow-sm rounded-[2rem] p-12 transition-all hover:shadow-2xl shadow-sm">
-          <h3 className="text-xl font-black text-slate-900 mb-12 uppercase tracking-widest flex items-center gap-3"><span className="w-1.5 h-6 bg-[#5B44F2] rounded-full"></span>시스템 환경 설정</h3>
+        {/* 시스템 환경 설정 */}
+        <div className="lg:col-span-12 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-sm rounded-[2rem] p-12 transition-all hover:shadow-2xl backdrop-blur-sm">
+          <h3 className="text-xl font-black text-slate-900 dark:text-white mb-12 uppercase tracking-widest flex items-center gap-3"><span className="w-1.5 h-6 bg-[#5B44F2] dark:bg-indigo-400 rounded-full"></span>시스템 환경 설정</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
             <div className="space-y-10">
               <div>
-                <div className="flex justify-between items-center mb-6"><span className="font-black text-slate-700 text-sm uppercase tracking-widest">소음 임계치 경고 (dB)</span><span className="font-black text-[#5B44F2] text-lg">{noiseThreshold} dB</span></div>
-                <input type="range" min="40" max="90" value={noiseThreshold} onChange={(e) => setNoiseThreshold(e.target.value)} className="w-full h-1.5 rounded-full outline-none appearance-none cursor-pointer shadow-inner" style={{ background: `linear-gradient(to right, #5B44F2 ${(noiseThreshold-40)/50*100}%, #e2e8f0 0%)` }} />
-                <div className="flex justify-between mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest"><span>정숙함 (40dB)</span><span>시끄러움 (90dB)</span></div>
+                <div className="flex justify-between items-center mb-6"><span className="font-black text-slate-700 dark:text-slate-300 text-base uppercase tracking-widest">소음 임계치 경고 (dB)</span><span className="font-black text-[#5B44F2] dark:text-indigo-400 text-xl">{noiseThreshold} dB</span></div>
+                <input type="range" min="40" max="90" value={noiseThreshold} onChange={(e) => setNoiseThreshold(e.target.value)} className="w-full h-2 rounded-full outline-none appearance-none cursor-pointer shadow-inner bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-none" style={{ background: `linear-gradient(to right, #5B44F2 ${(noiseThreshold-40)/50*100}%, transparent 0%)` }} />
+                <div className="flex justify-between mt-5 text-xs font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest"><span>정숙함 (40dB)</span><span>시끄러움 (90dB)</span></div>
               </div>
             </div>
-            <div className="flex flex-col gap-8 md:pl-12 md:border-l border-slate-100">
-              <div className="flex items-center justify-between"><div className="min-w-0 pr-4"><p className="font-black text-slate-700 text-sm uppercase tracking-tight">실시간 사운드 알림</p><p className="text-[11px] text-slate-400 font-bold mt-1">자세 이탈이나 고소음 감지 시 효과음 재생</p></div><button onClick={() => setIsSoundAlert(!isSoundAlert)} className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 shadow-inner ${isSoundAlert ? 'bg-[#5B44F2]' : 'bg-slate-200'}`}><span className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full shadow-sm transition-transform ${isSoundAlert ? 'translate-x-6' : 'translate-x-0'}`}></span></button></div>
-              <div className="flex items-center justify-between"><div className="min-w-0 pr-4"><p className="font-black text-slate-700 text-sm uppercase tracking-tight">주간 집중 분석 레터</p><p className="text-[11px] text-slate-400 font-bold mt-1">매주 월요일 사용자님의 집중 데이터를 요약 발송</p></div><button onClick={() => setIsWeeklyReport(!isWeeklyReport)} className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 shadow-inner ${isWeeklyReport ? 'bg-[#5B44F2]' : 'bg-slate-200'}`}><span className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full shadow-sm transition-transform ${isWeeklyReport ? 'translate-x-6' : 'translate-x-0'}`}></span></button></div>
+            <div className="flex flex-col gap-8 md:pl-12 md:border-l border-slate-200 dark:border-slate-800">
+              
+              {/* 다크모드 제어 토글 */}
+              {setIsDarkMode && (
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 pr-4">
+                    <p className="font-black text-slate-700 dark:text-slate-200 text-base uppercase tracking-tight">다크 모드 활성화</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-bold mt-1.5">눈이 편안한 어두운 테마로 전환합니다</p>
+                  </div>
+                  <button onClick={() => setIsDarkMode(!isDarkMode)} className={`w-14 h-7 rounded-full transition-colors relative flex-shrink-0 shadow-inner border dark:border-none ${isDarkMode ? 'bg-[#5B44F2] border-[#5B44F2]' : 'bg-slate-200 border-slate-300'}`}>
+                    <span className={`absolute top-1 left-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${isDarkMode ? 'translate-x-7' : 'translate-x-0'}`}></span>
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between"><div className="min-w-0 pr-4"><p className="font-black text-slate-700 dark:text-slate-200 text-base uppercase tracking-tight">실시간 사운드 알림</p><p className="text-xs text-slate-500 dark:text-slate-400 font-bold mt-1.5">자세 이탈이나 고소음 감지 시 효과음 재생</p></div><button onClick={() => setIsSoundAlert(!isSoundAlert)} className={`w-14 h-7 rounded-full transition-colors relative flex-shrink-0 shadow-inner border dark:border-none ${isSoundAlert ? 'bg-[#5B44F2] border-[#5B44F2]' : 'bg-slate-200 border-slate-300'}`}><span className={`absolute top-1 left-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${isSoundAlert ? 'translate-x-7' : 'translate-x-0'}`}></span></button></div>
+              <div className="flex items-center justify-between"><div className="min-w-0 pr-4"><p className="font-black text-slate-700 dark:text-slate-200 text-base uppercase tracking-tight">주간 집중 분석 레터</p><p className="text-xs text-slate-500 dark:text-slate-400 font-bold mt-1.5">매주 월요일 사용자님의 집중 데이터를 요약 발송</p></div><button onClick={() => setIsWeeklyReport(!isWeeklyReport)} className={`w-14 h-7 rounded-full transition-colors relative flex-shrink-0 shadow-inner border dark:border-none ${isWeeklyReport ? 'bg-[#5B44F2] border-[#5B44F2]' : 'bg-slate-200 border-slate-300'}`}><span className={`absolute top-1 left-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${isWeeklyReport ? 'translate-x-7' : 'translate-x-0'}`}></span></button></div>
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );

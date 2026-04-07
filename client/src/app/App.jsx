@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import '../App.css';
 import { authApi } from '../shared/api';
 import ErrorBoundary from '../shared/ui/ErrorBoundary';
@@ -13,7 +13,7 @@ import MyPage from '../pages/MyPage';
 
 /**
  * [애플리케이션 최상위 컨테이너]
- * - 전역 다크/라이트 모드 테마 관리
+ * - 전역 다크/라이트 모드 테마 관리 및 하위 페이지 상태 주입
  * - 초기 로드 시 세션 유효성 검증(자동 로그인 유지)
  * - GNB(Global Navigation Bar) 렌더링 및 페이지 라우팅 분기
  */
@@ -22,9 +22,10 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  /* 전역 테마 상태: 로컬 스토리지에서 이전 사용자 설정을 복구 */
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
 
-  /* 로컬 스토리지 설정을 읽어 테마 초기화 및 DOM 반영 */
+  /* 테마 상태 변경 시 DOM(html 태그)에 dark 클래스 토글 및 스토리지 동기화 */
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -67,16 +68,15 @@ export default function App() {
   return (
     <ErrorBoundary>
       <style>{`html { overflow-y: scroll !important; }`}</style>
+      {/* 배경색 및 텍스트 색상 전환 시 부드러운 트랜지션 적용 */}
       <div className="min-h-screen transition-colors duration-300">
         <header className="px-8 py-5 flex justify-between items-center bg-slate-900 border-b border-slate-800 sticky top-0 z-50 transition-colors">
           <div onClick={() => navigate('/')} className="cursor-pointer hover:opacity-80 transition-opacity">
-            {/* 로고 영역 대문자화 및 트래킹 조정 */}
             <div className="uppercase tracking-tighter">
               <Logo />
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {/* --- 네비게이션 바 메뉴 영문 대문자화 --- */}
             {!isLoggedIn ? (
               <div className="flex gap-2">
                 <button onClick={() => navigate('/login')} className="px-5 py-2.5 rounded-xl text-[11px] font-black text-indigo-200 hover:text-white transition-colors uppercase tracking-[0.2em]">LOGIN</button>
@@ -103,7 +103,8 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/report" element={<Report />} />
             <Route path="/report/:imm_idx" element={<Report />} />
-            <Route path="/mypage" element={<MyPage />} />
+            {/* 전역 테마 제어 함수를 MyPage에 주입 (Props Drilling) */}
+            <Route path="/mypage" element={<MyPage isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />} />
           </Routes>
         </main>
       </div>

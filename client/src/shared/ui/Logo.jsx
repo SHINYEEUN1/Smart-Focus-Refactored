@@ -2,18 +2,19 @@ import React from 'react';
 
 /**
  * 서비스 공용 로고 컴포넌트
- * - 렌더링되는 배경의 명도(isDarkBg)에 따라 텍스트 및 브랜드 심볼의 컬러셋을 동적으로 반전 처리
+ * - 렌더링되는 배경의 명도(isDarkBg) 또는 전역 다크모드(dark class)에 따라
+ * 텍스트 및 브랜드 심볼의 컬러셋을 동적으로 반전 처리
  */
 export default function Logo({ isDarkBg = true }) {
-  // 배경에 따른 브랜드 컬러 팔레트 동적 할당
-  const brandColor = isDarkBg ? 'text-indigo-400' : 'text-indigo-600';
-  const titleColor = isDarkBg ? 'text-white' : 'text-slate-950';
+  // 배경 또는 시스템 테마에 따른 브랜드 컬러 팔레트 동적 할당
+  const brandColor = isDarkBg ? 'text-indigo-400' : 'text-indigo-600 dark:text-indigo-400';
+  const titleColor = isDarkBg ? 'text-white' : 'text-slate-950 dark:text-white';
 
   return (
     <div className="flex items-center gap-x-3.5 select-none">
       
       {/* 육각형(Hexagon) 형태의 브랜드 심볼 마크 영역 */}
-      <div className="relative flex items-center justify-center w-12 h-12 flex-shrink-0">
+      <div className="relative flex items-center justify-center w-12 h-12 flex-shrink-0 transition-colors duration-300">
         <svg 
           viewBox="-1 -1 26 26" 
           fill="none" 
@@ -33,7 +34,7 @@ export default function Logo({ isDarkBg = true }) {
       </div>
       
       {/* 서비스명 및 브랜드 슬로건 텍스트 영역 */}
-      <div className="flex flex-col justify-center">
+      <div className="flex flex-col justify-center transition-colors duration-300">
         <span className={`font-black text-2xl tracking-tight leading-none ${titleColor}`}>
           Smart Focus
         </span>

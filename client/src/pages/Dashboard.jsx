@@ -5,13 +5,12 @@ import { immersionApi } from '../shared/api';
 
 /**
  * [실시간 집중도 트래킹 및 HUD 스켈레톤 대시보드]
+ * - 전역 다크모드 테마 동기화 완료
  * - MediaPipe 기반 실시간 비전(자세, 안면) 분석 및 소켓 스트리밍
  * - Web Audio API를 활용한 주변 소음(dB) 실시간 측정
  * - 사용자의 신체 비율(baseEarDist)에 맞춘 카메라 캘리브레이션(영점 조절)
- * - 분석 엔진 결과에 따른 실시간 점수(Score) 및 상태 표출
  */
 export default function Dashboard() {
-  /* (Hook 및 Ref 선언부 - 기존 코드 유지) */
   const navigate = useNavigate();
 
   const videoRef = useRef(null);
@@ -47,7 +46,6 @@ export default function Dashboard() {
 
   /* 웹소켓 연결 및 분석 엔진 피드백 수신 리스너 설정 */
   useEffect(() => {
-    // 하드코딩 제거: 운영/개발 환경 분리를 위한 환경변수 바인딩
     const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
     socketRef.current = io(SOCKET_URL, { withCredentials: true });
     
@@ -55,7 +53,6 @@ export default function Dashboard() {
       if (data.status === 'SUCCESS') {
         setIsEngineReady(true);
         let currentStatus = 'NORMAL';
-        // 백엔드 분석 엔진(analysis_engine.js)의 상세 상태값을 통합 UI 상태로 필터링
         const backendPosture = data.posture_status || data.postureStatus || '';
         if (backendPosture.includes('_WARNING') || backendPosture === 'LEANING_ON_HAND') { currentStatus = 'WARNING'; }
         else if (backendPosture.includes('_CAUTION')) { currentStatus = 'CAUTION'; }
@@ -82,7 +79,6 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [isFocusing, isAnalyzing]);
 
-  // 초(s) 데이터를 'HH:MM:SS' 형식으로 포맷팅
   const formatTime = (sec) => {
     const h = Math.floor(sec / 3600); const m = Math.floor((sec % 3600) / 60); const s = sec % 60;
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
@@ -146,7 +142,6 @@ export default function Dashboard() {
     faceMesh.onResults((res) => { faceLandmarksRef.current = res.multiFaceLandmarks?.[0] || null; });
 
     pose.onResults((res) => {
-      // 측정 중단 혹은 대상자 인식 불가 시 처리
       if (!canvasRef.current || isAnalyzing) return;
       if (!res.poseLandmarks) {
         setServerFeedback("⚠️ 사용자를 찾을 수 없습니다! 상체가 잘 보이도록 정면을 향해 앉아주세요.");
@@ -155,14 +150,13 @@ export default function Dashboard() {
       
       const ctx = canvasRef.current.getContext('2d'); 
       ctx.save(); 
-      // ... 캔버스 초기화
       ctx.clearRect(0, 0, 640, 480);
       
       const w = 640; 
       const h = 480;
       const p = res.poseLandmarks;
 
-      /* [UX 요소] 캘리브레이션 설정 후 기준선(가이드라인) 렌더링 */
+      /* 캘리브레이션 설정 후 기준선 렌더링 */
       if (calibrationRef.current && !needsCalibrationRef.current) {
         const { noseY, distY } = calibrationRef.current;
         const calibNoseY = noseY * h;
@@ -176,8 +170,6 @@ export default function Dashboard() {
         ctx.setLineDash([]); 
       }
 
-      //* 핵심 랜드마크 기반 하이테크 스켈레톤(척추, 어깨 선) 드로잉 */
-      /* FaceMesh 기반 안면 윤곽 드로잉 */
       if (p[11] && p[12] && p[0]) {
         ctx.strokeStyle = "rgba(99, 102, 241, 0.7)"; 
         ctx.lineWidth = 3;
@@ -227,14 +219,12 @@ export default function Dashboard() {
       
       ctx.restore();
 
-      /* 캘리브레이션 트리거 시 신체 기준 정보(귀/코 위치, 어깨 간격 등) 저장 */
       if (needsCalibrationRef.current) {
         const leftEar = res.poseLandmarks[7] || { x: 0, y: 0 }; const leftShoulder = res.poseLandmarks[11] || { x: 0, y: 0 }; const nose = res.poseLandmarks[0] || { x: 0, y: 0 }; const rightEar = res.poseLandmarks[8] || { x: 0, y: 0 };
         calibrationRef.current = { distY: Math.abs(leftEar.y - leftShoulder.y), noseY: nose.y, earX: leftEar.x, sideDistX: Math.abs(leftEar.x - leftShoulder.x) * 640, baseEarDist: Math.abs(leftEar.x - rightEar.x) * 640 };
         needsCalibrationRef.current = false;
       }
 
-      /* 백엔드 연산 부하 방지를 위해 1초(1000ms) 단위로 데이터 패킷 전송 (Throttling) */
       const now = Date.now();
       if (now - lastSentTimeRef.current >= 1000) {
         lastSentTimeRef.current = now;
@@ -242,7 +232,6 @@ export default function Dashboard() {
       }
     });
 
-    // 카메라 피드 시작 및 모델 실행 루프
     await faceMesh.initialize(); await pose.initialize();
     if (videoRef.current) {
       cameraRef.current = new SafeCamera(videoRef.current, { onFrame: async () => { if (videoRef.current && poseRef.current && faceMeshRef.current && !isAnalyzing) { try { await poseRef.current.send({ image: videoRef.current }); await faceMeshRef.current.send({ image: videoRef.current }); } catch (err) { } } }, width: 640, height: 480 });
@@ -250,7 +239,6 @@ export default function Dashboard() {
     }
   };
 
-  /* 카메라, 오디오, MediaPipe 인스턴스 자원 해제 */
   const stopCamera = () => {
     if (cameraRef.current) { cameraRef.current.stop(); cameraRef.current = null; }
     if (videoRef.current?.srcObject) { videoRef.current.srcObject.getTracks().forEach(t => t.stop()); videoRef.current.srcObject = null; }
@@ -260,7 +248,6 @@ export default function Dashboard() {
     setIsEngineReady(false); setServerFeedback("우측 상단의 '▶ 측정 시작' 버튼을 눌러주세요."); setServerStatus('--'); setDisplayScore('--');
   };
 
-  /* 세션 시작 처리 (DB 식별자 발급 및 스트리밍 개시) */
   const handleStartMeasurement = async () => {
     try {
       const userInfoStr = localStorage.getItem('user_info');
@@ -274,7 +261,7 @@ export default function Dashboard() {
     } catch (err) { alert("서버 통신 중 에러가 발생했습니다."); }
   };
 
-  /* 측정 종료 및 AI 리포트 생성 프로세스 진입 */
+  /* [버그 수정] 측정 종료 및 AI 리포트 생성 프로세스 진입 시 무한 로딩 방지 */
   const handleStopMeasurement = async () => {
     if (!currentImmIdxRef.current) return;
     
@@ -291,31 +278,35 @@ export default function Dashboard() {
       if (result && result.success) { 
         setIsFocusing(false); 
         stopCamera();
-        setIsAnalyzing(false);
         navigate(`/report/${currentImmIdxRef.current}`); 
+      } else {
+        // API는 성공했으나 내부 로직(AI 생성 등)이 실패했을 때 UI 상태 고착 방지
+        alert(result?.message || "리포트 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
       }
     } catch (err) { 
       console.error("측정 종료 에러:", err.message); 
+      alert("서버 통신 중 오류가 발생했습니다.");
+    } finally {
+      // try든 catch든 무조건 로딩 스피너를 해제하여 무한 대기 현상 해결
       setIsAnalyzing(false);
-      alert("종료 처리 중 오류가 발생했습니다.");
     }
   };
 
   const displayStatusLabel = serverStatus === 'WARNING' ? '위험' : serverStatus === 'CAUTION' ? '주의' : serverStatus === 'NORMAL' ? '정상' : '--';
 
   return (
-    <div className="max-w-[1400px] mx-auto min-h-[90vh] p-6 lg:p-10 animate-fade-in font-sans selection:bg-indigo-100">
-      <div className="flex justify-between items-center mb-10 pb-6 border-b border-slate-200/60">
+    <div className="max-w-[1400px] mx-auto min-h-[90vh] p-6 lg:p-10 animate-fade-in font-sans selection:bg-indigo-100 dark:selection:bg-indigo-900/50">
+      <div className="flex justify-between items-center mb-10 pb-6 border-b border-slate-200/60 dark:border-slate-800/60 transition-colors">
         <div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tighter">실시간 집중도 분석</h2>
-          <p className="text-slate-500 mt-1 font-medium">AI가 사용자의 집중 상태와 주변 환경을 정밀하게 분석합니다.</p>
+          <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter transition-colors">실시간 집중도 분석</h2>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium transition-colors">AI가 사용자의 집중 상태와 주변 환경을 정밀하게 분석합니다.</p>
         </div>
         <div className="flex gap-4 items-center">
           {isFocusing && !isAnalyzing && (
             <button
               onClick={handleCalibrationRequest}
               disabled={calibrationCountdown !== null}
-              className="px-6 py-3.5 bg-white text-slate-700 border border-slate-200 rounded-2xl font-bold shadow-sm hover:bg-slate-50 transition-all hover:border-slate-300 active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:border-slate-300 dark:hover:border-slate-600 active:scale-95 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               🎯 {calibrationCountdown !== null ? `설정 중 (${calibrationCountdown})` : '영점 조절'}
             </button>
@@ -326,8 +317,8 @@ export default function Dashboard() {
             disabled={isAnalyzing}
             className={`px-10 py-3.5 rounded-2xl font-black shadow-lg transition-all active:scale-95 flex items-center gap-2 
               ${isAnalyzing ? 'bg-slate-800 text-white shadow-none cursor-wait' : 
-                isFocusing ? 'bg-white text-rose-600 border border-rose-100 hover:bg-rose-50 shadow-rose-100' : 
-                'bg-[#5B44F2] text-white hover:bg-[#4a36c4] shadow-indigo-100'}`}
+                isFocusing ? 'bg-white dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-900/40 shadow-rose-100 dark:shadow-none' : 
+                'bg-[#5B44F2] text-white hover:bg-[#4a36c4] shadow-indigo-100 dark:shadow-[0_10px_20px_-10px_rgba(91,68,242,0.5)]'}`}
           >
             {isAnalyzing ? (
               <span className="flex items-center gap-2">
@@ -342,15 +333,15 @@ export default function Dashboard() {
       <div className="flex flex-col gap-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
-            { label: '진행 시간', value: formatTime(focusSeconds), unit: '', icon: '⏱️', color: 'text-indigo-600', bgColor: 'bg-indigo-50' },
-            { label: '집중 에너지', value: displayScore, unit: '%', icon: '⚡', color: 'text-emerald-500', bgColor: 'bg-emerald-50' },
-            { label: '주변 소음', value: decibel, unit: 'dB', icon: '🎧', color: 'text-slate-500', bgColor: 'bg-slate-100' }
+            { label: '진행 시간', value: formatTime(focusSeconds), unit: '', icon: '⏱️', color: 'text-indigo-600 dark:text-indigo-400', bgColor: 'bg-indigo-50 dark:bg-indigo-900/30' },
+            { label: '집중 에너지', value: displayScore, unit: '%', icon: '⚡', color: 'text-emerald-500 dark:text-emerald-400', bgColor: 'bg-emerald-50 dark:bg-emerald-900/30' },
+            { label: '주변 소음', value: decibel, unit: 'dB', icon: '🎧', color: 'text-slate-500 dark:text-slate-400', bgColor: 'bg-slate-100 dark:bg-slate-800' }
           ].map((item, idx) => (
-            <div key={idx} className="bg-white rounded-3xl p-7 border border-slate-100 shadow-sm flex items-center gap-6 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-100/50 hover:-translate-y-1">
-              <div className={`w-16 h-16 rounded-full ${item.bgColor} flex items-center justify-center text-3xl border border-white/50 shadow-inner ${item.color}`}>{item.icon}</div>
+            <div key={idx} className="bg-white dark:bg-slate-900/50 rounded-3xl p-7 border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-6 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-100/50 dark:hover:shadow-indigo-900/20 hover:-translate-y-1 backdrop-blur-sm">
+              <div className={`w-16 h-16 rounded-full ${item.bgColor} flex items-center justify-center text-3xl border border-white/50 dark:border-white/5 shadow-inner ${item.color}`}>{item.icon}</div>
               <div>
-                <p className="text-sm font-semibold text-slate-400 mb-1.5">{item.label}</p>
-                <p className={`text-4xl font-black tracking-tight leading-none ${idx === 0 ? 'font-mono' : ''} text-slate-900`}>{item.value}<span className="text-xl text-slate-400 font-bold ml-1.5">{item.unit}</span></p>
+                <p className="text-sm font-semibold text-slate-400 dark:text-slate-500 mb-1.5">{item.label}</p>
+                <p className={`text-4xl font-black tracking-tight leading-none ${idx === 0 ? 'font-mono' : ''} text-slate-900 dark:text-white transition-colors`}>{item.value}<span className="text-xl text-slate-400 font-bold ml-1.5">{item.unit}</span></p>
               </div>
             </div>
           ))}
@@ -358,10 +349,10 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-8 flex flex-col h-full">
-            <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex-grow transition-all duration-300 hover:shadow-xl hover:shadow-indigo-100/50">
+            <div className="bg-white dark:bg-slate-900/50 rounded-3xl p-5 border border-slate-100 dark:border-slate-800 shadow-sm flex-grow transition-all duration-300 hover:shadow-xl hover:shadow-indigo-100/50 dark:hover:shadow-indigo-900/20 backdrop-blur-sm">
               <div className="flex justify-between items-center mb-5 px-1">
-                <h3 className="font-bold text-slate-900 text-lg tracking-tight">실시간 AI 비전 분석</h3>
-                {isFocusing && isEngineReady && !isAnalyzing && <div className="bg-slate-50 px-3.5 py-1.5 rounded-full flex items-center gap-2 text-slate-500 text-xs font-bold border border-slate-100 shadow-sm"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>AI 분석 활성화됨</div>}
+                <h3 className="font-bold text-slate-900 dark:text-white text-lg tracking-tight transition-colors">실시간 AI 비전 분석</h3>
+                {isFocusing && isEngineReady && !isAnalyzing && <div className="bg-slate-50 dark:bg-slate-800 px-3.5 py-1.5 rounded-full flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs font-bold border border-slate-100 dark:border-slate-700 shadow-sm"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>AI 분석 활성화됨</div>}
               </div>
 
               <style>{`
@@ -374,7 +365,7 @@ export default function Dashboard() {
                 .animate-laser { animation: laser-scan 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
               `}</style>
 
-              <div className="w-full aspect-[4/3] bg-slate-950 rounded-2xl relative overflow-hidden shadow-2xl shadow-slate-200 border border-slate-800">
+              <div className="w-full aspect-[4/3] bg-slate-950 rounded-2xl relative overflow-hidden shadow-2xl shadow-slate-200 dark:shadow-none border border-slate-800">
                 
                 <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover transform -scale-x-100 opacity-95" />
                 <canvas ref={canvasRef} className="absolute inset-0 w-full h-full transform -scale-x-100 z-10" width="640" height="480" />
@@ -428,7 +419,7 @@ export default function Dashboard() {
           </div>
 
           <div className="lg:col-span-4 flex flex-col gap-6 h-full">
-            <div className="p-8 py-10 rounded-[1.75rem] bg-slate-950 text-white shadow-2xl shadow-slate-300 flex flex-col items-center text-center flex-grow relative overflow-hidden transition-all duration-300 hover:shadow-indigo-300/30">
+            <div className="p-8 py-10 rounded-[1.75rem] bg-slate-950 dark:bg-slate-900 border border-slate-800/0 dark:border-slate-800 text-white shadow-2xl shadow-slate-300 dark:shadow-none flex flex-col items-center text-center flex-grow relative overflow-hidden transition-all duration-300 hover:shadow-indigo-300/30 dark:hover:border-indigo-900/50">
               <div className="absolute top-0 right-0 w-32 h-32 bg-[#5B44F2]/20 rounded-full blur-3xl pointer-events-none"></div>
               <h3 className="font-bold text-indigo-300 text-xs uppercase tracking-widest mb-12 border-b border-indigo-900/50 w-full pb-4 relative z-10">현재 집중 상태</h3>
 
@@ -454,32 +445,32 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden mt-2 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-100/50">
-          <div className="p-6 px-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/30">
-            <h3 className="font-bold text-slate-900 text-lg tracking-tight">실시간 데이터 기록</h3>
+        <div className="bg-white dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden mt-2 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-100/50 dark:hover:shadow-indigo-900/20 backdrop-blur-sm">
+          <div className="p-6 px-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/30 dark:bg-slate-800/30">
+            <h3 className="font-bold text-slate-900 dark:text-white text-lg tracking-tight transition-colors">실시간 데이터 기록</h3>
             <p className="text-slate-400 text-sm font-medium">가장 최근 측정된 5건의 데이터 표기</p>
           </div>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-xs">
+            <thead className="bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-xs transition-colors">
               <tr>
                 <th className="p-5 pl-8">측정 시간</th><th className="p-5">자세 상태</th><th className="p-5">집중도</th><th className="p-5">주변 소음 (dB)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
               {historyLog.length === 0 ? (
                 <tr><td colSpan="4" className="p-20 text-center"><div className="text-6xl mb-5 opacity-30">📊</div><p className="text-slate-400 font-bold tracking-widest text-lg opacity-60">측정된 데이터가 없습니다</p></td></tr>
               ) : (
                 historyLog.map((log, i) => (
-                  <tr key={i} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-5 pl-8 text-slate-600 font-mono font-bold text-xs">{log.detected_at}</td>
+                  <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <td className="p-5 pl-8 text-slate-600 dark:text-slate-400 font-mono font-bold text-xs">{log.detected_at}</td>
                     <td className="p-5">
-                      <span className={`px-3.5 py-1.5 rounded-full text-[12px] font-black tracking-tighter inline-flex items-center gap-1.5 shadow-sm ${log.pose_status === 'WARNING' ? 'bg-rose-50 text-rose-700 border border-rose-100' : log.pose_status === 'CAUTION' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                      <span className={`px-3.5 py-1.5 rounded-full text-[12px] font-black tracking-tighter inline-flex items-center gap-1.5 shadow-sm ${log.pose_status === 'WARNING' ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border border-rose-100 dark:border-rose-800/50' : log.pose_status === 'CAUTION' ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-800/50' : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50'}`}>
                         <span className={`w-1.5 h-1.5 rounded-full shadow-inner ${log.pose_status === 'WARNING' ? 'bg-rose-500' : log.pose_status === 'CAUTION' ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
                         {log.pose_status === 'WARNING' ? '위험' : log.pose_status === 'CAUTION' ? '주의' : '정상'}
                       </span>
                     </td>
-                    <td className="p-5 font-black text-slate-900 text-base">{log.imm_score}</td>
-                    <td className="p-5 text-slate-500 font-bold">{log.decibel}</td>
+                    <td className="p-5 font-black text-slate-900 dark:text-white text-base">{log.imm_score}</td>
+                    <td className="p-5 text-slate-500 dark:text-slate-400 font-bold">{log.decibel}</td>
                   </tr>
                 ))
               )}
