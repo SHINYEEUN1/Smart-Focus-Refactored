@@ -1,7 +1,13 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
+const POSE_LABEL_MAP = {
+  GOOD_POSTURE: '좋은 자세',
+  NORMAL: '정상 자세',
+  TURTLE_NECK: '거북목 자세',
+  LEANING_ON_HAND: '턱을 괴는 자세',
+  TILTED_CAUTION: '몸이 기울어진 자세',
+};
 
 /**
  * Gemini API 호출 실패 시 세션 데이터 기반으로 자체 피드백을 생성합니다.
@@ -74,7 +80,7 @@ async function generateFeedback(sessionData) {
     const poseText = poseSummary && poseSummary.length > 0
       ? poseSummary
         .filter(p => p.pose_status !== 'GOOD_POSTURE' && p.pose_status !== 'NORMAL')
-        .map(p => `${p.pose_status}: ${p.count}회`)
+        .map(p => `${POSE_LABEL_MAP[p.pose_status] || p.pose_status}: ${p.count}회`)
         .join(', ')
       : '자세 불량 없음';
 
@@ -100,7 +106,9 @@ async function generateFeedback(sessionData) {
 - 말투: 차분하고 신뢰감 있는 '해요체'를 사용하되, 전문 용어를 적절히 섞어 권위를 유지하십시오.
 - 일관성: 동일한 세션 데이터에 대해서는 항상 논리적으로 일관된 진단을 내리십시오.
 - 금지사항: 너무 가벼운 유행어나 감정적인 과잉 표현(예: "너무너무 대단해요!")은 사용하지 마십시오.
-
+- 자세 상태명은 사용자에게 보이는 자연스러운 한국어 표현으로 바꿔 작성할 것
+- GOOD_POSTURE, NORMAL, TURTLE_NECK 같은 내부 코드명은 응답에 직접 쓰지 말 것
+- 모든 문장은 사용자용 자연스러운 한국어로만 작성할 것
 [출력 형식]
 반드시 아래의 한국어 키를 가진 JSON 구조로만 응답하십시오.
 {
