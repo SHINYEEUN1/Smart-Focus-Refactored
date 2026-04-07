@@ -104,9 +104,8 @@ function getBufferedFinalPosture(postureBuffer) {
   return finalPosture;
 }
 
-function buildAnalysisResponse({ cameraMode, noiseStatus, finalPosture }) {
+function buildAnalysisResponse({ cameraMode, noiseStatus, finalPosture, currentScore }) {
   const coachingMessage = get_coaching_message(finalPosture, noiseStatus);
-  const currentScore = getDisplayScore(finalPosture);
 
   return {
     status: 'SUCCESS',

@@ -6,7 +6,7 @@ const {
 } = require('../services/analysis.service');
 
 const { SOCKET_EVENTS } = require('../../shared/constants/socket-events');
-
+const { GOOD_POSTURE_STATUS } = require('../../shared/constants/posture');
 const { savePoseIfChanged } = require('../services/pose.service');
 const { saveNoiseIfNeeded } = require('../services/noise.service');
 const { SOCKET_INTERVALS } = require('../utils/mappers');
@@ -18,6 +18,7 @@ function createInitialSocketState() {
     lastDispatchAtMs: 0,
     lastNoiseSavedAtMs: 0,
     isProcessing: false,
+    currentScore: 100,
     staticState: {
       lastNosePos: null,
       staticCheckStart: Date.now(),
@@ -90,6 +91,12 @@ function registerAnalysisSocket(io) {
 
         const finalPosture = getBufferedFinalPosture(socketState.postureBuffer);
 
+            if (GOOD_POSTURE_STATUS.includes(finalPosture)) {
+              socketState.currentScore = Math.min(100, socketState.currentScore + 1);
+              } else {
+                socketState.currentScore = Math.max(0, socketState.currentScore - 3);
+                }
+
         socketState.postureBuffer.length = 0;
         socketState.lastDispatchAtMs = currentTimestampMs;
 
@@ -124,6 +131,7 @@ function registerAnalysisSocket(io) {
           cameraMode,
           noiseStatus,
           finalPosture,
+          currentScore: socketState.currentScore,
         });
 
         socket.emit(SOCKET_EVENTS.ANALYSIS_RESULT, responsePayload);
