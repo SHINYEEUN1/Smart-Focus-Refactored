@@ -77,6 +77,21 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            
+            {/* 전역 다크모드 토글 버튼 추가 */}
+            <button 
+              onClick={() => setIsDarkMode(!isDarkMode)} 
+              className="p-2.5 bg-white/5 rounded-xl text-slate-400 hover:text-amber-400 hover:bg-white/10 transition-all focus:outline-none"
+              title={isDarkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
+            >
+              {isDarkMode ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+              )}
+            </button>
+            <div className="w-px h-4 bg-slate-700 mx-1"></div>
+
             {!isLoggedIn ? (
               <div className="flex gap-2">
                 <button onClick={() => navigate('/login')} className="px-5 py-2.5 rounded-xl text-[11px] font-black text-indigo-200 hover:text-white transition-colors uppercase tracking-[0.2em]">LOGIN</button>
