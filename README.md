@@ -41,7 +41,7 @@ GitHub에 README 작성
   - 주양덕(PM, DataBase 보조)
     일정 관리, 문서 작업, 발표
   - 신예은(Backend_Data Modeling)
-    MediaPipe 자세 분석 활용 자세 판단 알고리즘, Gemini API 연동 및 AI feedback 프롬프트 생성, 마이페이지 뱃지, 포인트 기능 구현, DB 기능 추가 및 수정 보조
+    MediaPipe 자세 분석 활용 자세 판단 알고리즘, Gemini API 연동 및 AI feedback 프롬프트 구현, 마이페이지 뱃지, 포인트 기능 구현, DB 기능 추가 및 수정 보조
   - 조성현(Frontend)
     React, Mediapipe, SocketIO를 활용한 인트로, 회원가입, 로그인, 대시보드, 보고서 페이지, 마이페이지, 화면 디자인 등등 프론트엔드의 전반적인 개발
   - 오철승(Backend)  

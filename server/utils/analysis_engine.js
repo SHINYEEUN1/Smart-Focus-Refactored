@@ -3,7 +3,7 @@ const {
   POSTURE_STATUS,
 } = require('../../shared/constants/posture');
 /**
- * [Smart Focus] 통합 분석 엔진 v2.0
+ * [Smart Focus] 통합 분석 엔진
  * --------------------------------------------------------------------------
  * [주요 분석 로직]
  * 1. 부동 자세 (STATIC): 코(Nose) 위치 변화량 < 0.05 기준, 20분(CAUTION) / 30분(WARNING) 추적
@@ -222,7 +222,7 @@ const analyze_posture = (landmarks, mode = 'FRONT_VIEW', calibration = null, fac
 
         // 상수 설정 (Thresholds)
         const TURTLE_WARNING_THRESH = 1.05; // 5% 이상 돌출 시 (위험)
-        const TURTLE_CAUTION_THRESH = 1.01; // 1.1% 이상 돌출 시 (주의)
+        const TURTLE_CAUTION_THRESH = 1.01; // 1% 이상 돌출 시 (주의)
         const SLUMPED_LIMIT_PX = 40;        // 40px 이상 내려가면 '엎드림'으로 판단하여 거북목 제외
 
         // ✨ 수치 확인을 위한 로그 추가 (테스트 시 필수!)
