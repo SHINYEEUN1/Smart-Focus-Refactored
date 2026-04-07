@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { authApi } from '../shared/api';
 
 /**
  * [회원가입 페이지]
- * - 다크모드 전역 테마 동기화 완료
- * - 닉네임 중복 검사 로직 및 이메일 인증 체인 구성
- * - 회원가입 성공 시 자동 로그인 및 대시보드 리다이렉트
+ * - [UX 개선] 이메일 도메인 자동완성 드롭다운 (키보드 방향키 및 Enter 선택 지원)
+ * - [UI 개선] 인증 번호 입력창 렌더링 시 발생하는 Layout Shift 방지
+ * - [Bug Fix] 이메일 발송 비동기 로딩 스피너 및 이미 가입된 이메일 예외 처리
  */
+const EMAIL_DOMAINS = ['gmail.com', 'naver.com', 'kakao.com', 'daum.net', 'hanmail.net'];
+
 export default function SignUp({ onNavigate, setIsLoggedIn }) {
   const [nick, setNick] = useState('');
   const [email, setEmail] = useState('');
@@ -14,8 +16,70 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
   const [isEmailSent, setIsEmailSent] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
   const [authCode, setAuthCode] = useState('');
+  
+  const [isEmailSending, setIsEmailSending] = useState(false);
+  
+  /* 이메일 자동완성 상태 및 키보드 네비게이션 관리 */
+  const [showDomainDropdown, setShowDomainDropdown] = useState(false);
+  const [filteredDomains, setFilteredDomains] = useState(EMAIL_DOMAINS);
+  const [focusedDomainIndex, setFocusedDomainIndex] = useState(-1);
+  const emailInputRef = useRef(null);
+  const dropdownRef = useRef(null);
 
-  /* 닉네임 사용 가능 여부 API 검증 */
+  /* 이메일 입력 감지 및 도메인 필터링 로직 */
+  const handleEmailChange = (e) => {
+    const val = e.target.value;
+    setEmail(val);
+    
+    if (val.includes('@')) {
+      const [, domainPart] = val.split('@');
+      const filtered = EMAIL_DOMAINS.filter(d => d.startsWith(domainPart));
+      setFilteredDomains(filtered);
+      setShowDomainDropdown(filtered.length > 0 && !isVerified);
+      setFocusedDomainIndex(-1); // 입력이 바뀌면 포커스 인덱스 초기화
+    } else {
+      setShowDomainDropdown(false);
+    }
+  };
+
+  /* 키보드 방향키 제어 로직 */
+  const handleEmailKeyDown = (e) => {
+    if (!showDomainDropdown) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedDomainIndex((prev) => (prev < filteredDomains.length - 1 ? prev + 1 : prev));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedDomainIndex((prev) => (prev > 0 ? prev - 1 : 0));
+    } else if (e.key === 'Enter' && focusedDomainIndex >= 0) {
+      e.preventDefault();
+      handleDomainSelect(filteredDomains[focusedDomainIndex]);
+    } else if (e.key === 'Escape') {
+      setShowDomainDropdown(false);
+    }
+  };
+
+  /* 추천 도메인 클릭 시 이메일 완성 */
+  const handleDomainSelect = (domain) => {
+    const [idPart] = email.split('@');
+    setEmail(`${idPart}@${domain}`);
+    setShowDomainDropdown(false);
+    setFocusedDomainIndex(-1);
+    emailInputRef.current?.focus(); 
+  };
+
+  /* 외부 클릭 시 드롭다운 닫기 처리를 위한 보완 (onBlur 지연보다 안정적) */
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target) && emailInputRef.current !== e.target) {
+        setShowDomainDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleNickCheck = async () => {
     if (!nick) return alert("닉네임을 먼저 입력해주세요.");
     try {
@@ -30,20 +94,28 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
     } catch (err) { alert("통신 오류가 발생했습니다."); }
   };
 
-  /* 가입 요청 이메일로 6자리 인증 코드 발송 요청 */
   const handleSendEmail = async () => {
-    if (!email) return alert("이메일을 입력해주세요.");
+    if (!email || !email.includes('@')) return alert("유효한 이메일을 입력해주세요.");
+    
+    setIsEmailSending(true);
     try {
       const data = await authApi.sendEmailCode(email);
       if (data && data.success) {
         alert("인증 코드를 발송했습니다. 메일함을 확인해주세요!");
         setIsEmailSent(true);
+        setShowDomainDropdown(false);
+      } else {
+        alert(data?.message || "이미 가입된 이메일이거나 발송에 실패했습니다.");
       }
-    } catch (err) { alert("이메일 발송 중 오류가 발생했습니다."); }
+    } catch (err) { 
+      alert("이메일 발송 중 서버 오류가 발생했습니다."); 
+    } finally {
+      setIsEmailSending(false); 
+    }
   };
 
-  /* 사용자가 입력한 인증 코드의 정합성 확인 */
   const handleVerifyCode = async () => {
+    if (!authCode) return alert("인증 코드를 입력해주세요.");
     try {
       const data = await authApi.verifyEmailCode(email, authCode);
       if (data && data.success) {
@@ -53,7 +125,6 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
     } catch (err) { alert("인증 중 서버 오류가 발생했습니다."); }
   };
 
-  /* 최종 폼 검증 (인증 여부, 비밀번호 일치) 후 회원 데이터 생성 */
   const handleSignUp = async (e) => {
     e.preventDefault();
     if (!isNickChecked) return alert("닉네임 중복 확인이 필요합니다.");
@@ -83,7 +154,7 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
         <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2 tracking-tighter transition-colors">회원가입</h1>
         <p className="text-sm font-bold text-slate-400 dark:text-slate-500 mb-8 px-1">포커스 러너의 여정을 시작해보세요.</p>
 
-        <form className="space-y-5" onSubmit={handleSignUp}>
+        <form className="space-y-6" onSubmit={handleSignUp}>
           <div>
             <label className="text-xs font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest block mb-2 px-1">닉네임</label>
             <div className="flex gap-2">
@@ -92,35 +163,71 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
             </div>
           </div>
 
-          <div>
+          {/* 이메일 입력 구역 */}
+          <div className="relative">
             <label className="text-xs font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest block mb-2 px-1">이메일 인증</label>
-            <div className="flex gap-2 mb-2">
-              <input type="email" value={email} disabled={isVerified} onChange={(e) => setEmail(e.target.value)} className="flex-1 px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 transition-all font-bold text-sm disabled:opacity-50 text-slate-900 dark:text-white" placeholder="your@email.com" required />
-              <button type="button" onClick={handleSendEmail} disabled={isVerified} className="px-4 py-3.5 bg-slate-800 text-white rounded-xl font-black text-xs hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 transition-all">코드발송</button>
-            </div>
-            {isEmailSent && !isVerified && (
-              <div className="flex gap-2 animate-fade-in">
-                <input type="text" value={authCode} onChange={(e) => setAuthCode(e.target.value)} className="flex-1 px-5 py-3.5 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800/50 rounded-2xl outline-none font-bold text-sm text-slate-900 dark:text-white" placeholder="인증코드 6자리" required />
-                <button type="button" onClick={handleVerifyCode} className="px-4 py-3.5 bg-[#5B44F2] text-white rounded-xl font-black text-xs shadow-md">확인</button>
+            <div className="flex gap-2 mb-3">
+              <div className="relative flex-1">
+                <input 
+                  ref={emailInputRef}
+                  type="email" 
+                  name="email"
+                  autoComplete="email"
+                  value={email} 
+                  disabled={isVerified || isEmailSending} 
+                  onChange={handleEmailChange}
+                  onKeyDown={handleEmailKeyDown} // 키보드 조작 이벤트 연동
+                  className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 transition-all font-bold text-sm disabled:opacity-50 text-slate-900 dark:text-white" 
+                  placeholder="your@email.com" 
+                  required 
+                />
+                
+                {/* 도메인 추천 드롭다운 (키보드 하이라이트 UI 반영) */}
+                {showDomainDropdown && (
+                  <ul ref={dropdownRef} className="absolute left-0 right-0 top-[110%] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                    {filteredDomains.map((domain, index) => (
+                      <li 
+                        key={domain} 
+                        onClick={() => handleDomainSelect(domain)}
+                        className={`px-5 py-3 text-sm font-bold cursor-pointer transition-colors ${
+                          index === focusedDomainIndex 
+                            ? 'bg-[#5B44F2]/10 dark:bg-indigo-500/20 text-[#5B44F2] dark:text-indigo-300 border-l-4 border-[#5B44F2]' 
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 border-l-4 border-transparent'
+                        }`}
+                      >
+                        {email.split('@')[0]}<span className={index === focusedDomainIndex ? 'font-black' : 'text-[#5B44F2] dark:text-indigo-400'}>@{domain}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-            )}
-            {isVerified && <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold px-1 mt-1 transition-colors">✓ 이메일 인증이 완료되었습니다.</p>}
+              
+              <button type="button" onClick={handleSendEmail} disabled={isVerified || isEmailSending} className="w-24 px-4 py-3.5 bg-slate-800 text-white rounded-xl font-black text-xs hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 transition-all disabled:opacity-50 flex items-center justify-center">
+                {isEmailSending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : '코드발송'}
+              </button>
+            </div>
+
+            <div className={`flex gap-2 transition-all duration-300 ${isEmailSent ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
+              <input type="text" value={authCode} onChange={(e) => setAuthCode(e.target.value)} disabled={!isEmailSent || isVerified} className="flex-1 px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 transition-all font-bold text-sm text-slate-900 dark:text-white disabled:bg-slate-100 dark:disabled:bg-slate-900" placeholder="인증코드 6자리" maxLength="6" />
+              <button type="button" onClick={handleVerifyCode} disabled={!isEmailSent || isVerified} className="px-4 py-3.5 bg-[#5B44F2] text-white rounded-xl font-black text-xs shadow-md hover:bg-[#4a36c4] transition-all disabled:opacity-50 disabled:shadow-none">확인</button>
+            </div>
+            {isVerified && <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold px-1 mt-2 transition-colors animate-fade-in">✓ 이메일 인증이 완료되었습니다.</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 pt-2">
             <div>
               <label className="text-xs font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest block mb-2 px-1">비밀번호</label>
-              <input type="password" name="pwd" className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 font-bold text-sm text-slate-900 dark:text-white" placeholder="8자 이상" minLength="8" required />
+              <input type="password" name="pwd" className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 font-bold text-sm text-slate-900 dark:text-white transition-all" placeholder="8자 이상" minLength="8" required />
             </div>
             <div>
               <label className="text-xs font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest block mb-2 px-1">비밀번호 확인</label>
-              <input type="password" name="pwdConfirm" className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 font-bold text-sm text-slate-900 dark:text-white" placeholder="다시 입력" required />
+              <input type="password" name="pwdConfirm" className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 font-bold text-sm text-slate-900 dark:text-white transition-all" placeholder="다시 입력" required />
             </div>
           </div>
 
-          <button type="submit" className="w-full py-4 bg-[#5B44F2] text-white rounded-2xl font-black shadow-lg hover:bg-[#4a36c4] active:scale-[0.98] transition-all mt-4">포커스 러너 가입하기</button>
+          <button type="submit" className="w-full py-4 bg-[#5B44F2] text-white rounded-2xl font-black text-base shadow-lg hover:bg-[#4a36c4] active:scale-[0.98] transition-all mt-6">포커스 러너 가입하기</button>
         </form>
-        <button onClick={() => onNavigate('login')} className="w-full mt-6 text-xs font-bold text-slate-400 dark:text-slate-500 hover:text-[#5B44F2] dark:hover:text-indigo-400 transition-colors underline underline-offset-4">이미 계정이 있으신가요? 로그인</button>
+        <button onClick={() => onNavigate('login')} className="w-full mt-8 text-xs font-bold text-slate-400 dark:text-slate-500 hover:text-[#5B44F2] dark:hover:text-indigo-400 transition-colors underline underline-offset-4">이미 계정이 있으신가요? 로그인</button>
       </div>
     </div>
   );
