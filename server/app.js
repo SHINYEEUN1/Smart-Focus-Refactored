@@ -48,9 +48,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 로그인 상태 유지를 위한 세션 설정
-// secret: 세션 암호화 키
-// rolling: 요청이 들어올 때마다 세션 만료시간 갱신
-// cookie 설정으로 세션 유지 시간, 보안 옵션 지정
+// rolling: true → 요청이 올 때마다 세션 만료 시간을 갱신한다.
+// 이유: 사용자가 활동 중인 동안은 로그아웃되지 않아야 하며,
+//       일정 시간 동안 아무 요청도 없을 때만 세션이 만료되도록 하기 위함.
+// secure: production에서만 HTTPS 쿠키 전송 → 개발 환경에서는 HTTP로도 동작 가능하게 함.
+// httpOnly: 자바스크립트에서 쿠키 접근 차단 → XSS 공격으로 세션 탈취 방지.
+// sameSite: lax → CSRF 완화 및 기본적인 크로스 사이트 정책 설정.
 
 app.use(session({
   secret: process.env.SESSION_SECRET,
@@ -59,15 +62,15 @@ app.use(session({
   rolling: true,
   cookie: {
     maxAge: 1000 * 60 * 60, // maxAge: 세션 유지 시간(현재 1시간)
-    secure: process.env.NODE_ENV === 'production', // secure: 배포 환경에서만 HTTPS 쿠키 전송
-    httpOnly: true, // httpOnly: 자바스크립트에서 쿠키 접근 차단
-    sameSite: 'lax', // sameSite: CSRF 완화 및 기본적인 크로스 사이트 정책 설정
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax',
   },
 }));
 
 // passport 인증 기능 활성화
 // initialize(): passport 기능 시작
-// session(): 세션에 저장된 사용자 정보를 req.user로 복원
+// session(): 세션에 저장된 user_idx로 DB를 조회해 req.user를 복원
 
 configurePassport();
 app.use(passport.initialize());
@@ -79,12 +82,16 @@ app.use(passport.session());
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
 // 기능별 라우터 연결
-// mainRouter: 기본/테스트용 라우트
-// userRouter: 회원가입, 로그인, 소셜 로그인 등 사용자 인증 관련
-// immersionRouter: 집중 세션 시작/종료/리포트 API
-// mypageRouter: 마이페이지/통계 관련 API
+// /auth: 회원가입, 로그인, 소셜 로그인 등 사용자 인증 관련
+// /api/immersion: 집중 세션 시작/종료/리포트 API
+// /api/mypage: 마이페이지/통계 관련 API
 
 app.use('/', mainRouter);
+// /auth와 /user 두 경로에 동일한 라우터를 마운트한다.
+// 이유: 클라이언트 API가 기능에 따라 두 경로를 혼용하고 있다.
+// - /auth/*: 소셜 로그인(Google/Kakao/Naver), 세션 확인, 이메일 인증
+// - /user/*: 일반 로그인, 로그아웃, 회원가입
+// 두 경로를 분리하려면 클라이언트 API 파일도 함께 변경해야 하므로 현재는 유지한다.
 app.use('/auth', userRouter);
 app.use('/user', userRouter);
 app.use('/api/immersion', immersionRouter);
@@ -92,7 +99,8 @@ app.use('/api/mypage', mypageRouter);
 
 // socket.io 서버 생성
 // 프론트와 실시간 데이터 통신(자세 분석, 점수 변화 등)을 처리
-// CORS 설정도 소켓 연결용으로 별도로 맞춰줌
+// socket.io는 자체적으로 CORS를 독립적으로 관리하므로, express cors 설정과 별도로 지정해야 한다.
+// credentials: true를 함께 설정해야 소켓 연결 시 세션 쿠키가 포함된다.
 
 const io = new Server(server, {
   cors: {

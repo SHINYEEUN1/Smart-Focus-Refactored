@@ -1,75 +1,27 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { authApi } from '../shared/api';
+import { useEmailAutocomplete } from '../hooks/useEmailAutocomplete';
 
 /**
  * [로그인 페이지]
  * - [UX 개선] 회원가입 폼과 동일한 이메일 도메인 자동완성 (키보드 방향키 제어 완비)
  * - OAuth 2.0 기반 소셜 로그인(네이버, 카카오, 구글) 연동
  */
-const EMAIL_DOMAINS = ['gmail.com', 'naver.com', 'kakao.com', 'daum.net', 'hanmail.net'];
-
 export default function Login({ onNavigate, setIsLoggedIn }) {
   const [email, setEmail] = useState('');
   const [pwd, setPwd] = useState('');
-  
-  /* 이메일 자동완성 드롭다운 상태 관리 */
-  const [showDomainDropdown, setShowDomainDropdown] = useState(false);
-  const [filteredDomains, setFilteredDomains] = useState(EMAIL_DOMAINS);
-  const [focusedDomainIndex, setFocusedDomainIndex] = useState(-1);
-  const emailInputRef = useRef(null);
-  const dropdownRef = useRef(null);
 
-  const handleEmailChange = (e) => {
-    const val = e.target.value;
-    setEmail(val);
-    
-    if (val.includes('@')) {
-      const [, domainPart] = val.split('@');
-      const filtered = EMAIL_DOMAINS.filter(d => d.startsWith(domainPart));
-      setFilteredDomains(filtered);
-      setShowDomainDropdown(filtered.length > 0);
-      setFocusedDomainIndex(-1);
-    } else {
-      setShowDomainDropdown(false);
-    }
-  };
-
-  /* 키보드 방향키 제어 로직 */
-  const handleEmailKeyDown = (e) => {
-    if (!showDomainDropdown) return;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setFocusedDomainIndex((prev) => (prev < filteredDomains.length - 1 ? prev + 1 : prev));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setFocusedDomainIndex((prev) => (prev > 0 ? prev - 1 : 0));
-    } else if (e.key === 'Enter' && focusedDomainIndex >= 0) {
-      e.preventDefault();
-      handleDomainSelect(filteredDomains[focusedDomainIndex]);
-    } else if (e.key === 'Escape') {
-      setShowDomainDropdown(false);
-    }
-  };
-
-  const handleDomainSelect = (domain) => {
-    const [idPart] = email.split('@');
-    setEmail(`${idPart}@${domain}`);
-    setShowDomainDropdown(false);
-    setFocusedDomainIndex(-1);
-    emailInputRef.current?.focus(); 
-  };
-
-  /* 외부 클릭 시 드롭다운 닫기 처리를 위한 보완 */
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target) && emailInputRef.current !== e.target) {
-        setShowDomainDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  // 이메일 자동완성 로직은 Login/SignUp에서 동일하므로 커스텀 훅으로 분리했다.
+  const {
+    showDomainDropdown,
+    filteredDomains,
+    focusedDomainIndex,
+    emailInputRef,
+    dropdownRef,
+    handleEmailChange,
+    handleEmailKeyDown,
+    handleDomainSelect,
+  } = useEmailAutocomplete(email, setEmail);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -96,7 +48,7 @@ export default function Login({ onNavigate, setIsLoggedIn }) {
     <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] dark:bg-transparent p-6 font-sans transition-colors duration-300">
       <div className="perspective-container group w-full max-w-[1100px]">
         <div className="login-card-3d relative flex bg-white dark:bg-slate-900/80 rounded-[32px] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden transition-all duration-700 backdrop-blur-md">
-          
+
           <div className="hidden lg:flex flex-col justify-center p-16 bg-gradient-to-br from-[#eef2ff] to-[#e0e7ff] dark:from-indigo-950/40 dark:to-slate-900/40 border-r border-slate-100 dark:border-slate-800/50 w-5/12 transition-colors">
             <h2 className="text-[3.2rem] font-black text-[#4f46e5] dark:text-indigo-400 leading-[1.1] mb-6 tracking-tighter">
               다시 집중의<br />시간으로
@@ -116,27 +68,27 @@ export default function Login({ onNavigate, setIsLoggedIn }) {
               <div className="relative">
                 <label className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.1em] block mb-2 px-1">Email Account</label>
                 <div className="relative">
-                  <input 
+                  <input
                     ref={emailInputRef}
-                    type="email" 
-                    name="email" 
+                    type="email"
+                    name="email"
                     autoComplete="email"
                     value={email}
                     onChange={handleEmailChange}
                     onKeyDown={handleEmailKeyDown}
-                    placeholder="focus@chrono.com" 
-                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-indigo-50 dark:focus:ring-indigo-900/30 focus:border-[#5B44F2] dark:focus:border-indigo-400 transition-all font-bold text-sm text-slate-900 dark:text-white" 
-                    required 
+                    placeholder="focus@chrono.com"
+                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-indigo-50 dark:focus:ring-indigo-900/30 focus:border-[#5B44F2] dark:focus:border-indigo-400 transition-all font-bold text-sm text-slate-900 dark:text-white"
+                    required
                   />
                   {showDomainDropdown && (
                     <ul ref={dropdownRef} className="absolute left-0 right-0 top-[110%] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
                       {filteredDomains.map((domain, index) => (
-                        <li 
-                          key={domain} 
+                        <li
+                          key={domain}
                           onClick={() => handleDomainSelect(domain)}
                           className={`px-6 py-3 text-sm font-bold cursor-pointer transition-colors ${
-                            index === focusedDomainIndex 
-                              ? 'bg-[#5B44F2]/10 dark:bg-indigo-500/20 text-[#5B44F2] dark:text-indigo-300 border-l-4 border-[#5B44F2]' 
+                            index === focusedDomainIndex
+                              ? 'bg-[#5B44F2]/10 dark:bg-indigo-500/20 text-[#5B44F2] dark:text-indigo-300 border-l-4 border-[#5B44F2]'
                               : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 border-l-4 border-transparent'
                           }`}
                         >
@@ -149,14 +101,14 @@ export default function Login({ onNavigate, setIsLoggedIn }) {
               </div>
               <div>
                 <label className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.1em] block mb-2 px-1">Password</label>
-                <input 
-                  type="password" 
-                  name="pwd" 
+                <input
+                  type="password"
+                  name="pwd"
                   value={pwd}
                   onChange={(e) => setPwd(e.target.value)}
-                  placeholder="••••••••" 
-                  className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-indigo-50 dark:focus:ring-indigo-900/30 focus:border-[#5B44F2] dark:focus:border-indigo-400 transition-all font-bold text-sm text-slate-900 dark:text-white" 
-                  required 
+                  placeholder="••••••••"
+                  className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-indigo-50 dark:focus:ring-indigo-900/30 focus:border-[#5B44F2] dark:focus:border-indigo-400 transition-all font-bold text-sm text-slate-900 dark:text-white"
+                  required
                 />
               </div>
               <button type="submit" className="w-full py-4 bg-[#5B44F2] text-white rounded-2xl font-black text-base shadow-lg hover:bg-[#4a36c4] hover:-translate-y-0.5 active:scale-[0.98] transition-all">접속하기</button>

@@ -3,6 +3,8 @@ const bcrypt = require('bcrypt');
 const emailAuthService = require('./email-auth.service');
 const { AUTH_PROVIDERS } = require('../../shared');
 
+// bcrypt 해시 강도. 값이 높을수록 보안이 강하지만 CPU 사용량이 증가한다.
+// 10은 보안과 성능의 일반적인 균형점이다.
 const SALT_ROUNDS = 10;
 
 const AUTH_ERROR = {
@@ -16,6 +18,8 @@ async function join({ email, pwd, nick }) {
   const normalizedEmail = email.trim().toLowerCase();
   const trimmedNick = nick.trim();
 
+  // 이메일 인증이 완료된 경우에만 가입을 허용한다.
+  // 인증되지 않은 이메일로 가입하면 본인 확인이 불가능해 계정 도용 위험이 생긴다.
   if (!emailAuthService.isVerified(normalizedEmail)) {
     throw new Error(AUTH_ERROR.EMAIL_NOT_VERIFIED);
   }
@@ -62,6 +66,9 @@ async function checkNickAvailable(nick) {
 async function login({ email, pwd }) {
   const normalizedEmail = email.trim().toLowerCase();
 
+  // provider가 LOCAL이거나 NULL인 계정만 일반 로그인 허용.
+  // 소셜 로그인 계정은 비밀번호가 더미값으로 설정되어 있어
+  // 일반 로그인 경로로 접근하면 보안 문제가 생길 수 있다.
   const [users] = await pool.query(
     `SELECT
       user_idx, email, pwd, nick, provider, sns_id, created_at
@@ -82,6 +89,7 @@ async function login({ email, pwd }) {
     throw new Error(AUTH_ERROR.LOGIN_FAILED);
   }
 
+  // 비밀번호 해시를 세션 및 응답에 포함시키지 않기 위해 제거한다.
   const { pwd: _password, ...userInfo } = user;
   return userInfo;
 }
@@ -99,6 +107,9 @@ async function findUserById(userId) {
   return rows[0] || null;
 }
 
+// SNS ID 우선 조회 후, 없으면 이메일로 재조회한다.
+// 이유: 동일 이메일로 여러 소셜 계정이 존재할 수 있으므로 sns_id 매칭을 먼저 시도하고,
+// sns_id가 없는 경우(이메일만 있는 계정)는 이메일로 연결한다.
 async function findOAuthUser({ provider, snsId, email }) {
   if (provider && snsId) {
     const [snsRows] = await pool.query(
@@ -131,11 +142,14 @@ async function findOAuthUser({ provider, snsId, email }) {
   return null;
 }
 
+// 소셜 로그인 신규 사용자 생성.
+// 비밀번호 필드가 NOT NULL이므로 더미 비밀번호를 bcrypt로 해시하여 저장한다.
+// 더미 비밀번호는 provider+snsId+timestamp 조합이므로 추측 불가하며,
+// 소셜 사용자는 이 경로로 로그인하지 않으므로 보안상 문제가 없다.
 async function createOAuthUser({ provider, email, nick, snsId }) {
   const normalizedEmail = email ? email.trim().toLowerCase() : null;
   const trimmedNick = nick?.trim() || `${provider}_user`;
 
-  // 소셜 로그인 계정용 더미 비밀번호
   const dummyPassword = await bcrypt.hash(
     `${provider}_${snsId}_${Date.now()}`,
     SALT_ROUNDS
@@ -152,6 +166,8 @@ async function createOAuthUser({ provider, email, nick, snsId }) {
   return findUserById(result.insertId);
 }
 
+// 소셜 로그인 시 기존 계정이 있으면 반환하고, 없으면 신규 생성한다.
+// 재가입 방지 및 동일 사용자의 계정 통합 처리를 위한 함수다.
 async function findOrCreateOAuthUser({ provider, email, nick, snsId }) {
   let user = await findOAuthUser({ provider, snsId, email });
 
@@ -162,25 +178,6 @@ async function findOrCreateOAuthUser({ provider, email, nick, snsId }) {
   return user;
 }
 
-// 기존 코드 호환용
-async function findGoogleUserByEmail(email) {
-  return findOAuthUser({
-    provider: AUTH_PROVIDERS.GOOGLE,
-    email,
-    snsId: null,
-  });
-}
-
-// 기존 코드 호환용
-async function createGoogleUser({ email, nick, snsId }) {
-  return createOAuthUser({
-    provider: AUTH_PROVIDERS.GOOGLE,
-    email,
-    nick,
-    snsId,
-  });
-}
-
 module.exports = {
   join,
   checkNickAvailable,
@@ -189,7 +186,5 @@ module.exports = {
   findOAuthUser,
   createOAuthUser,
   findOrCreateOAuthUser,
-  findGoogleUserByEmail,
-  createGoogleUser,
   AUTH_ERROR,
 };

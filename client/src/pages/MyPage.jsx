@@ -70,7 +70,9 @@ export default function MyPage({ isDarkMode, setIsDarkMode }) {
         if (statsRes.success && histRes.success) {
           setPageData({ stats: statsRes.data ?? pageData.stats, history: histRes.data ?? [] });
         }
-      } catch (e) { console.error(e); } finally { setIsLoading(false); }
+      } catch (e) {
+        if (import.meta.env.DEV) console.error('[MYPAGE FETCH ERROR]', e);
+      } finally { setIsLoading(false); }
     };
     fetchAllData();
   }, [userInfo?.user_idx, navigate]);

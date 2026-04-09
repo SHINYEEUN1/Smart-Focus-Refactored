@@ -56,10 +56,19 @@ export default function Dashboard() {
     setShowOnboarding(false);
   };
 
+  // calibrationCountdown과 isAnalyzing을 Ref로 관리하여 소켓 리스너가 항상 최신 값을 참조하도록 한다.
+  // 이유: useEffect 의존성 배열에 이 값들을 넣으면 소켓이 재연결될 때마다 리스너가 재등록되어
+  //       분석 결과가 순간적으로 누락될 수 있다.
+  const calibrationCountdownRef = useRef(null);
+  const isAnalyzingRef = useRef(false);
+
+  useEffect(() => { calibrationCountdownRef.current = calibrationCountdown; }, [calibrationCountdown]);
+  useEffect(() => { isAnalyzingRef.current = isAnalyzing; }, [isAnalyzing]);
+
   useEffect(() => {
     const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
     socketRef.current = io(SOCKET_URL, { withCredentials: true });
-    
+
     socketRef.current.on('analysis_result', (data) => {
       if (data.status === 'SUCCESS') {
         setIsEngineReady(true);
@@ -67,8 +76,8 @@ export default function Dashboard() {
         const backendPosture = data.posture_status || data.postureStatus || '';
         if (backendPosture.includes('_WARNING') || backendPosture === 'LEANING_ON_HAND') { currentStatus = 'WARNING'; }
         else if (backendPosture.includes('_CAUTION')) { currentStatus = 'CAUTION'; }
-        
-        if (calibrationCountdown === null && !isAnalyzing) setServerFeedback(data.message);
+
+        if (calibrationCountdownRef.current === null && !isAnalyzingRef.current) setServerFeedback(data.message);
         setServerStatus(currentStatus);
         const finalScore = data.current_score || 0;
         setDisplayScore(finalScore);
@@ -76,22 +85,24 @@ export default function Dashboard() {
         const time = new Date().toLocaleTimeString('ko-KR');
         setHistoryLog(prev => [{ detected_at: time, pose_status: currentStatus, imm_score: `${finalScore}%`, decibel: `${decibelRef.current} dB` }, ...prev].slice(0, 5));
       } else {
-        if (!isAnalyzing) setServerFeedback(data.message);
+        if (!isAnalyzingRef.current) setServerFeedback(data.message);
       }
     });
     return () => { if (socketRef.current) socketRef.current.disconnect(); };
-  }, [calibrationCountdown, isAnalyzing]);
+  }, []);
 
   useEffect(() => {
     let interval;
-    if (isFocusing && !isAnalyzing) interval = setInterval(() => setFocusSeconds(p => p + 1), 1000);
+    if (isFocusing && !isAnalyzing) interval = setInterval(() => setFocusSeconds(prev => prev + 1), 1000);
     else clearInterval(interval);
     return () => clearInterval(interval);
   }, [isFocusing, isAnalyzing]);
 
-  const formatTime = (sec) => {
-    const h = Math.floor(sec / 3600); const m = Math.floor((sec % 3600) / 60); const s = sec % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  const formatTime = (totalSeconds) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const handleCalibrationRequest = async () => {
@@ -133,17 +144,33 @@ export default function Dashboard() {
     }, 1000);
   };
 
-  const startCamera = async () => {
-    const loadScript = (src) => new Promise((res) => { const s = document.createElement('script'); s.src = src; s.onload = res; document.body.appendChild(s); });
+  // MediaPipe 라이브러리를 CDN에서 동적으로 로드하는 헬퍼.
+  // 빌드 번들에 포함하지 않는 이유: MediaPipe WASM 파일이 수십 MB에 달해
+  // 초기 번들 크기를 과도하게 늘리기 때문이다.
+  const loadMediaPipeScripts = async () => {
+    const loadScript = (src) => new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.onload = resolve;
+      document.body.appendChild(script);
+    });
     if (!window.Pose) await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js');
     if (!window.FaceMesh) await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
     if (!window.Camera) await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+  };
 
+  // 마이크 스트림을 열고 AudioContext로 실시간 데시벨을 측정한다.
+  // requestAnimationFrame으로 매 프레임마다 갱신하여 소음 수치를 실시간으로 반영한다.
+  const initAudioAnalyser = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const audioCtx = new AudioContext(); audioContextRef.current = audioCtx;
-      const analyser = audioCtx.createAnalyser(); const source = audioCtx.createMediaStreamSource(stream); source.connect(analyser);
+      const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
+      const analyser = audioCtx.createAnalyser();
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
       const updateDecibel = () => {
         if (!audioContextRef.current) return;
         analyser.getByteFrequencyData(dataArray);
@@ -153,81 +180,176 @@ export default function Dashboard() {
         requestAnimationFrame(updateDecibel);
       };
       updateDecibel();
-    } catch (err) { console.error("마이크 오류", err); }
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('[MICROPHONE ERROR]', err);
+    }
+  };
 
-    const SafePose = window.Pose; const SafeCamera = window.Camera; const SafeFaceMesh = window.FaceMesh;
+  // Pose와 FaceMesh 인스턴스를 초기화하고 카메라 루프를 시작한다.
+  // FaceMesh 결과(faceLandmarksRef)는 Pose onResults 안에서 참조되어
+  // 거북목/턱괴기 등 얼굴 랜드마크가 필요한 분석에 사용된다.
+  // pose.onResults에서 isFocusingRef(Ref)를 참조하는 이유:
+  // React closure 특성상 콜백 내부에서 isFocusing(State)은 등록 시점의 값으로 고정되지만,
+  // Ref는 항상 최신 값을 참조하므로 측정 시작/종료 상태를 정확히 반영할 수 있다.
+  const initPoseAndFaceMesh = async () => {
+    const SafePose = window.Pose;
+    const SafeCamera = window.Camera;
+    const SafeFaceMesh = window.FaceMesh;
+
     const faceMesh = new SafeFaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
     const pose = new SafePose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-    faceMeshRef.current = faceMesh; poseRef.current = pose;
+    faceMeshRef.current = faceMesh;
+    poseRef.current = pose;
 
     faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5 });
     pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
-    faceMesh.onResults((res) => { faceLandmarksRef.current = res.multiFaceLandmarks?.[0] || null; });
 
-    pose.onResults((res) => {
+    faceMesh.onResults((results) => {
+      faceLandmarksRef.current = results.multiFaceLandmarks?.[0] || null;
+    });
+
+    pose.onResults((results) => {
       if (!canvasRef.current || isAnalyzing) return;
-      if (!res.poseLandmarks) {
+      if (!results.poseLandmarks) {
         setServerFeedback("⚠️ 사용자를 찾을 수 없습니다! 상체가 잘 보이도록 정면을 향해 앉아주세요.");
-        setServerStatus('--'); return;
+        setServerStatus('--');
+        return;
       }
-      
-      const ctx = canvasRef.current.getContext('2d'); 
-      ctx.save(); ctx.clearRect(0, 0, 640, 480);
-      const w = 640; const h = 480; const p = res.poseLandmarks;
 
+      const ctx = canvasRef.current.getContext('2d');
+      ctx.save();
+      ctx.clearRect(0, 0, 640, 480);
+      const canvasWidth = 640;
+      const canvasHeight = 480;
+      const poseLandmarks = results.poseLandmarks;
+
+      // 영점 조절 기준선을 캔버스에 그린다.
+      // 사용자가 올바른 자세 기준점을 시각적으로 확인할 수 있도록 반투명 가이드라인을 표시한다.
       if (calibrationRef.current && !needsCalibrationRef.current) {
         const { noseY, distY } = calibrationRef.current;
-        const calibNoseY = noseY * h; const calibShoulderY = (noseY + distY) * h;
-        ctx.setLineDash([5, 5]); ctx.strokeStyle = "rgba(52, 211, 153, 0.6)"; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(w * 0.15, calibNoseY); ctx.lineTo(w * 0.85, calibNoseY); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(w * 0.1, calibShoulderY); ctx.lineTo(w * 0.9, calibShoulderY); ctx.stroke();
-        ctx.setLineDash([]); 
+        const calibNoseY = noseY * canvasHeight;
+        const calibShoulderY = (noseY + distY) * canvasHeight;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = "rgba(52, 211, 153, 0.6)";
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(canvasWidth * 0.15, calibNoseY); ctx.lineTo(canvasWidth * 0.85, calibNoseY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(canvasWidth * 0.1, calibShoulderY); ctx.lineTo(canvasWidth * 0.9, calibShoulderY); ctx.stroke();
+        ctx.setLineDash([]);
       }
 
-      if (p[11] && p[12] && p[0]) {
-        ctx.strokeStyle = "rgba(99, 102, 241, 0.7)"; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(p[11].x * w, p[11].y * h); ctx.lineTo(p[12].x * w, p[12].y * h); ctx.stroke();
-        const neckX = (p[11].x + p[12].x) / 2 * w; const neckY = (p[11].y + p[12].y) / 2 * h;
-        ctx.strokeStyle = "rgba(56, 189, 248, 0.9)"; ctx.lineWidth = 2; ctx.setLineDash([4, 4]); 
-        ctx.beginPath(); ctx.moveTo(neckX, neckY); ctx.lineTo(p[0].x * w, p[0].y * h); ctx.stroke(); ctx.setLineDash([]);
+      // 어깨 연결선과 목선을 그린다.
+      if (poseLandmarks[11] && poseLandmarks[12] && poseLandmarks[0]) {
+        ctx.strokeStyle = "rgba(99, 102, 241, 0.7)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(poseLandmarks[11].x * canvasWidth, poseLandmarks[11].y * canvasHeight);
+        ctx.lineTo(poseLandmarks[12].x * canvasWidth, poseLandmarks[12].y * canvasHeight);
+        ctx.stroke();
+        const neckX = (poseLandmarks[11].x + poseLandmarks[12].x) / 2 * canvasWidth;
+        const neckY = (poseLandmarks[11].y + poseLandmarks[12].y) / 2 * canvasHeight;
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.9)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(neckX, neckY);
+        ctx.lineTo(poseLandmarks[0].x * canvasWidth, poseLandmarks[0].y * canvasHeight);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
 
-      ctx.strokeStyle = "rgba(129, 140, 248, 0.5)"; ctx.lineWidth = 2;
-      const faceConns = [ [0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8] ];
-      ctx.beginPath(); faceConns.forEach(([i, j]) => { if (p[i] && p[j]) { ctx.moveTo(p[i].x * w, p[i].y * h); ctx.lineTo(p[j].x * w, p[j].y * h); } }); ctx.stroke();
+      // 얼굴 연결선을 그린다.
+      ctx.strokeStyle = "rgba(129, 140, 248, 0.5)";
+      ctx.lineWidth = 2;
+      const faceConns = [[0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8]];
+      ctx.beginPath();
+      faceConns.forEach(([i, j]) => {
+        if (poseLandmarks[i] && poseLandmarks[j]) {
+          ctx.moveTo(poseLandmarks[i].x * canvasWidth, poseLandmarks[i].y * canvasHeight);
+          ctx.lineTo(poseLandmarks[j].x * canvasWidth, poseLandmarks[j].y * canvasHeight);
+        }
+      });
+      ctx.stroke();
 
-      p.forEach((pt, i) => {
-        if (i > 12) return; 
-        ctx.beginPath(); ctx.arc(pt.x * w, pt.y * h, i === 0 ? 5 : 3.5, 0, 2 * Math.PI); 
-        ctx.fillStyle = "#ffffff"; ctx.fill(); ctx.lineWidth = 2;
-        ctx.strokeStyle = i === 0 ? "#38BDF8" : (i === 11 || i === 12) ? "#818CF8" : "#A78BFA"; ctx.stroke(); 
-      }); 
+      // 랜드마크 점을 그린다 (코·어깨만 강조).
+      poseLandmarks.forEach((point, i) => {
+        if (i > 12) return;
+        ctx.beginPath();
+        ctx.arc(point.x * canvasWidth, point.y * canvasHeight, i === 0 ? 5 : 3.5, 0, 2 * Math.PI);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = i === 0 ? "#38BDF8" : (i === 11 || i === 12) ? "#818CF8" : "#A78BFA";
+        ctx.stroke();
+      });
       ctx.restore();
 
+      // needsCalibrationRef가 true이면 현재 프레임의 랜드마크로 기준값을 캡처한다.
+      // 영점 조절 완료 시 단 한 번만 실행되며, 이후 false로 초기화된다.
       if (needsCalibrationRef.current) {
-        const leftEar = res.poseLandmarks[7] || { x: 0, y: 0 }; const leftShoulder = res.poseLandmarks[11] || { x: 0, y: 0 }; const nose = res.poseLandmarks[0] || { x: 0, y: 0 }; const rightEar = res.poseLandmarks[8] || { x: 0, y: 0 };
-        calibrationRef.current = { distY: Math.abs(leftEar.y - leftShoulder.y), noseY: nose.y, earX: leftEar.x, sideDistX: Math.abs(leftEar.x - leftShoulder.x) * 640, baseEarDist: Math.abs(leftEar.x - rightEar.x) * 640 };
+        const leftEar = results.poseLandmarks[7] || { x: 0, y: 0 };
+        const leftShoulder = results.poseLandmarks[11] || { x: 0, y: 0 };
+        const nose = results.poseLandmarks[0] || { x: 0, y: 0 };
+        const rightEar = results.poseLandmarks[8] || { x: 0, y: 0 };
+        calibrationRef.current = {
+          distY: Math.abs(leftEar.y - leftShoulder.y),
+          noseY: nose.y,
+          earX: leftEar.x,
+          sideDistX: Math.abs(leftEar.x - leftShoulder.x) * 640,
+          baseEarDist: Math.abs(leftEar.x - rightEar.x) * 640
+        };
         needsCalibrationRef.current = false;
       }
 
-      /* [Bug Fix] isFocusing(State) 대신 isFocusingRef.current(Ref)를 참조하여 정확한 전송 제어 */
+      // isFocusingRef(Ref)를 참조하여 정확한 전송 제어.
+      // 1초에 한 번씩만 소켓으로 스트림 데이터를 전송한다.
       const now = Date.now();
       if (isFocusingRef.current && currentImmIdxRef.current && (now - lastSentTimeRef.current >= 1000)) {
         lastSentTimeRef.current = now;
-        if (socketRef.current) socketRef.current.emit('stream_data', { imm_idx: currentImmIdxRef.current, landmarks: res.poseLandmarks, noise_db: decibelRef.current, calibration: calibrationRef.current, faceLandmarks: faceLandmarksRef.current });
+        if (socketRef.current) {
+          socketRef.current.emit('stream_data', {
+            imm_idx: currentImmIdxRef.current,
+            landmarks: results.poseLandmarks,
+            noise_db: decibelRef.current,
+            calibration: calibrationRef.current,
+            faceLandmarks: faceLandmarksRef.current
+          });
+        }
       }
     });
 
-    await faceMesh.initialize(); await pose.initialize();
+    await faceMesh.initialize();
+    await pose.initialize();
+
     if (videoRef.current) {
-      cameraRef.current = new SafeCamera(videoRef.current, { onFrame: async () => { if (videoRef.current && poseRef.current && faceMeshRef.current && !isAnalyzing) { try { await poseRef.current.send({ image: videoRef.current }); await faceMeshRef.current.send({ image: videoRef.current }); } catch (err) { } } }, width: 640, height: 480 });
+      cameraRef.current = new SafeCamera(videoRef.current, {
+        onFrame: async () => {
+          if (videoRef.current && poseRef.current && faceMeshRef.current && !isAnalyzing) {
+            try {
+              await poseRef.current.send({ image: videoRef.current });
+              await faceMeshRef.current.send({ image: videoRef.current });
+            } catch (err) { /* 카메라 프레임 전송 실패는 무시하고 다음 프레임을 처리한다 */ }
+          }
+        },
+        width: 640,
+        height: 480
+      });
       cameraRef.current.start();
     }
   };
 
+  // startCamera는 세 단계를 순서대로 실행한다:
+  // 1. MediaPipe 스크립트 CDN 로드
+  // 2. 마이크 오디오 분석기 초기화
+  // 3. Pose/FaceMesh 모델 초기화 및 카메라 루프 시작
+  const startCamera = async () => {
+    await loadMediaPipeScripts();
+    await initAudioAnalyser();
+    await initPoseAndFaceMesh();
+  };
+
   const stopCamera = () => {
     if (cameraRef.current) { cameraRef.current.stop(); cameraRef.current = null; }
-    if (videoRef.current?.srcObject) { videoRef.current.srcObject.getTracks().forEach(t => t.stop()); videoRef.current.srcObject = null; }
+    if (videoRef.current?.srcObject) { videoRef.current.srcObject.getTracks().forEach(track => track.stop()); videoRef.current.srcObject = null; }
     if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
     if (poseRef.current) { poseRef.current.close(); poseRef.current = null; }
     if (faceMeshRef.current) { faceMeshRef.current.close(); faceMeshRef.current = null; }
@@ -293,7 +415,10 @@ export default function Dashboard() {
       } else {
         alert(result?.message || "리포트 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
       }
-    } catch (err) { console.error("측정 종료 에러:", err.message); alert("서버 통신 중 오류가 발생했습니다."); } 
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('[STOP MEASUREMENT ERROR]', err.message);
+      alert("서버 통신 중 오류가 발생했습니다.");
+    }
     finally { setIsAnalyzing(false); }
   };
 

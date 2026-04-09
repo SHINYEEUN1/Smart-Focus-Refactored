@@ -6,6 +6,10 @@ const { sendSuccess, sendFail } = require('../utils/response');
 const { isValidEmail, isNonEmptyString } = require('../utils/validators');
 const { RESPONSE_CODES, AUTH_PROVIDERS } = require('../../shared');
 
+// 개발 환경에서만 에러 로그를 출력하기 위한 플래그.
+// production에서는 에러 세부 내용을 노출하지 않는다.
+const DEBUG = process.env.NODE_ENV !== 'production';
+
 function getClientUrl() {
   return process.env.CLIENT_URL || 'http://localhost:5173';
 }
@@ -18,6 +22,10 @@ function redirectToDashboard(res) {
   return res.redirect(`${getClientUrl()}/dashboard`);
 }
 
+// OAuth 로그인 공통 완료 처리.
+// req.login으로 세션에 사용자를 등록한 뒤, 세션을 저장하고 대시보드로 리디렉트한다.
+// 세션 저장을 명시적으로 호출하는 이유: express-session의 saveUninitialized: false 설정 시
+// 세션이 자동 저장되지 않아 이후 요청에서 로그인 정보가 유실될 수 있기 때문이다.
 function finishOAuthLogin(req, res, next, user) {
   req.login(user, (loginErr) => {
     if (loginErr) {
@@ -32,6 +40,40 @@ function finishOAuthLogin(req, res, next, user) {
       return redirectToDashboard(res);
     });
   });
+}
+
+// OAuth 토큰 발급 요청의 응답 유효성을 확인하는 공통 헬퍼.
+// 공급자(카카오/네이버)마다 토큰 발급 실패 방식이 동일하므로 추출함.
+// 실패 시 개발 환경에서만 에러 내용을 출력하고, 로그인 페이지로 리디렉트한다.
+async function fetchOAuthToken(url, options, providerName) {
+  const tokenResponse = await fetch(url, options);
+  const tokenPayload = await tokenResponse.json();
+
+  if (!tokenResponse.ok || !tokenPayload.access_token) {
+    if (DEBUG) console.error(`[${providerName} TOKEN ERROR]`, tokenPayload);
+    return null;
+  }
+
+  return tokenPayload;
+}
+
+// OAuth 프로필 조회 요청의 응답 유효성을 확인하는 공통 헬퍼.
+// 토큰을 Bearer로 실어 보내는 방식이 카카오/네이버 모두 동일하므로 추출함.
+// 프로필 ID 미포함 시 개발 환경에서만 에러 내용을 출력하고, null 반환.
+async function fetchOAuthProfile(url, accessToken, providerName) {
+  const profileResponse = await fetch(url, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const profilePayload = await profileResponse.json();
+
+  if (!profileResponse.ok || !profilePayload?.id) {
+    if (DEBUG) console.error(`[${providerName} PROFILE ERROR]`, profilePayload);
+    return null;
+  }
+
+  return profilePayload;
 }
 
 async function sendEmailCode(req, res) {
@@ -49,7 +91,7 @@ async function sendEmailCode(req, res) {
       return sendFail(res, 409, '이미 사용 중인 이메일입니다.', RESPONSE_CODES.DUPLICATE_EMAIL);
     }
 
-    console.error('[SEND EMAIL ERROR]', error);
+    if (DEBUG) console.error('[SEND EMAIL ERROR]', error);
     return sendFail(res, 500, '메일 발송에 실패했습니다.', 'MAIL_SEND_FAILED');
   }
 }
@@ -197,6 +239,9 @@ function getSession(req, res) {
   return sendSuccess(res, '세션이 유효합니다.', { user: req.user });
 }
 
+// Google OAuth는 passport-google-oauth20이 콜백 처리를 완료한 뒤
+// req.user에 사용자 정보를 이미 설정해두기 때문에 별도의 토큰 교환이 필요 없다.
+// 세션 저장 후 대시보드로 리디렉트만 수행한다.
 function googleCallback(req, res, next) {
   if (!req.user) {
     return redirectToLogin(res);
@@ -211,7 +256,9 @@ function googleCallback(req, res, next) {
   });
 }
 
-function redirectKakao(req, res) {
+// 카카오 로그인 진입 시 카카오 인증 서버로 리디렉트.
+// 카카오는 passport 전략 없이 직접 fetch로 구현하므로, 인가 코드 요청 URL을 수동으로 생성한다.
+function redirectKakao(_req, res) {
   const redirectUri = encodeURIComponent(process.env.KAKAO_CALLBACK_URL);
   const clientId = process.env.KAKAO_CLIENT_ID;
 
@@ -224,6 +271,10 @@ function redirectKakao(req, res) {
   return res.redirect(url);
 }
 
+// 카카오 인증 서버가 인가 코드와 함께 돌아오면 실행되는 콜백.
+// 1단계: 인가 코드로 액세스 토큰 발급
+// 2단계: 액세스 토큰으로 사용자 프로필 조회
+// 3단계: DB에서 기존 회원 조회 또는 신규 가입 처리
 async function kakaoCallback(req, res, next) {
   const { code } = req.query;
 
@@ -232,45 +283,37 @@ async function kakaoCallback(req, res, next) {
   }
 
   try {
-    const tokenRes = await fetch('https://kauth.kakao.com/oauth/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+    // 카카오 토큰 엔드포인트는 application/x-www-form-urlencoded 형식만 허용하므로 URLSearchParams 사용
+    const tokenPayload = await fetchOAuthToken(
+      'https://kauth.kakao.com/oauth/token',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: process.env.KAKAO_CLIENT_ID,
+          client_secret: process.env.KAKAO_CLIENT_SECRET || '',
+          redirect_uri: process.env.KAKAO_CALLBACK_URL,
+          code,
+        }),
       },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: process.env.KAKAO_CLIENT_ID,
-        client_secret: process.env.KAKAO_CLIENT_SECRET || '',
-        redirect_uri: process.env.KAKAO_CALLBACK_URL,
-        code,
-      }),
-    });
+      'KAKAO'
+    );
 
-    const tokenData = await tokenRes.json();
+    if (!tokenPayload) return redirectToLogin(res);
 
-    if (!tokenRes.ok || !tokenData.access_token) {
-      console.error('[KAKAO TOKEN ERROR]', tokenData);
-      return redirectToLogin(res);
-    }
+    // 카카오 프로필 API: id 필드가 없으면 유효하지 않은 응답으로 처리
+    const profilePayload = await fetchOAuthProfile(
+      'https://kapi.kakao.com/v2/user/me',
+      tokenPayload.access_token,
+      'KAKAO'
+    );
 
-    const profileRes = await fetch('https://kapi.kakao.com/v2/user/me', {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${tokenData.access_token}`,
-        'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
-      },
-    });
+    if (!profilePayload?.id) return redirectToLogin(res);
 
-    const profileData = await profileRes.json();
-
-    if (!profileRes.ok || !profileData?.id) {
-      console.error('[KAKAO PROFILE ERROR]', profileData);
-      return redirectToLogin(res);
-    }
-
-    const snsId = String(profileData.id);
-    const email = profileData.kakao_account?.email || null;
-    const nick = profileData.kakao_account?.profile?.nickname || 'kakao_user';
+    const snsId = String(profilePayload.id);
+    const email = profilePayload.kakao_account?.email || null;
+    const nick = profilePayload.kakao_account?.profile?.nickname || 'kakao_user';
 
     const user = await authService.findOrCreateOAuthUser({
       provider: AUTH_PROVIDERS.KAKAO,
@@ -281,11 +324,14 @@ async function kakaoCallback(req, res, next) {
 
     return finishOAuthLogin(req, res, next, user);
   } catch (error) {
-    console.error('[KAKAO CALLBACK ERROR]', error);
+    if (DEBUG) console.error('[KAKAO CALLBACK ERROR]', error);
     return next(error);
   }
 }
 
+// 네이버 로그인 진입 시 네이버 인증 서버로 리디렉트.
+// CSRF 방지를 위해 state 값을 crypto로 생성하여 세션에 저장한다.
+// 콜백에서 state가 일치하는지 검증해 위조된 요청을 차단한다.
 function redirectNaver(req, res, next) {
   const state = crypto.randomBytes(16).toString('hex');
 
@@ -310,14 +356,19 @@ function redirectNaver(req, res, next) {
   });
 }
 
+// 네이버 인증 서버가 인가 코드와 함께 돌아오면 실행되는 콜백.
+// state 검증 → 토큰 발급 → 프로필 조회 → DB 처리 순서로 진행한다.
+// 네이버 프로필 응답은 data.response 하위에 실제 사용자 정보가 있다.
 async function naverCallback(req, res, next) {
   const { code, state } = req.query;
 
+  // state 불일치 시 CSRF 공격 또는 잘못된 요청으로 간주하여 로그인 페이지로 이동
   if (!code || !state || state !== req.session.oauthState) {
     return redirectToLogin(res);
   }
 
   try {
+    // 네이버 토큰 엔드포인트는 GET 방식으로 쿼리 파라미터를 전달받는다
     const tokenUrl =
       `https://nid.naver.com/oauth2.0/token?grant_type=authorization_code` +
       `&client_id=${encodeURIComponent(process.env.NAVER_CLIENT_ID)}` +
@@ -325,26 +376,21 @@ async function naverCallback(req, res, next) {
       `&code=${encodeURIComponent(code)}` +
       `&state=${encodeURIComponent(state)}`;
 
-    const tokenRes = await fetch(tokenUrl, { method: 'GET' });
-    const tokenData = await tokenRes.json();
+    const tokenPayload = await fetchOAuthToken(tokenUrl, { method: 'GET' }, 'NAVER');
 
-    if (!tokenRes.ok || !tokenData.access_token) {
-      console.error('[NAVER TOKEN ERROR]', tokenData);
-      return redirectToLogin(res);
-    }
+    if (!tokenPayload) return redirectToLogin(res);
 
-    const profileRes = await fetch('https://openapi.naver.com/v1/nid/me', {
+    // 네이버 프로필 응답은 { resultcode, message, response: { id, email, ... } } 구조
+    const rawProfilePayload = await fetch('https://openapi.naver.com/v1/nid/me', {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${tokenData.access_token}`,
-      },
+      headers: { Authorization: `Bearer ${tokenPayload.access_token}` },
     });
 
-    const profileData = await profileRes.json();
-    const profile = profileData?.response;
+    const profilePayload = await rawProfilePayload.json();
+    const profile = profilePayload?.response;
 
-    if (!profileRes.ok || !profile?.id) {
-      console.error('[NAVER PROFILE ERROR]', profileData);
+    if (!rawProfilePayload.ok || !profile?.id) {
+      if (DEBUG) console.error('[NAVER PROFILE ERROR]', profilePayload);
       return redirectToLogin(res);
     }
 
@@ -359,11 +405,12 @@ async function naverCallback(req, res, next) {
       snsId,
     });
 
+    // 세션에 저장했던 oauthState는 콜백 처리 후 더 이상 필요 없으므로 제거
     delete req.session.oauthState;
 
     return finishOAuthLogin(req, res, next, user);
   } catch (error) {
-    console.error('[NAVER CALLBACK ERROR]', error);
+    if (DEBUG) console.error('[NAVER CALLBACK ERROR]', error);
     return next(error);
   }
 }
