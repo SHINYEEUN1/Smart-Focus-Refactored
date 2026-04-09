@@ -1,82 +1,89 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// 자세 상태 코드(analysis_engine.js 출력값)를 사용자에게 보여줄 한국어 라벨로 변환한다.
+// 프롬프트에 내부 코드명이 그대로 포함되면 AI가 이를 응답에 그대로 노출할 수 있으므로
+// 자연스러운 한국어 표현으로 사전 치환한다.
+// 주의: TURTLE_NECK 단독 코드는 실제로 사용되지 않으며, 실제 코드는 TURTLE_NECK_WARNING / CAUTION이다.
 const POSE_LABEL_MAP = {
   GOOD_POSTURE: '좋은 자세',
   NORMAL: '정상 자세',
-  TURTLE_NECK: '거북목 자세',
+  TURTLE_NECK_WARNING: '거북목 위험',
+  TURTLE_NECK_CAUTION: '거북목 주의',
   LEANING_ON_HAND: '턱을 괴는 자세',
   TILTED_CAUTION: '몸이 기울어진 자세',
+  TILTED_WARNING: '몸이 심하게 기울어진 자세',
+  SLUMPED_WARNING: '구부정한 자세',
+  SLUMPED_CAUTION: '자세 낮아짐 주의',
+  STATIC_WARNING: '장시간 부동 자세',
+  STATIC_CAUTION: '부동 자세 주의',
 };
 
 /**
- * Gemini API 호출 실패 시 세션 데이터 기반으로 자체 피드백을 생성합니다.
- * @param {Object} sessionData - 세션 데이터
-*/
-
+ * Gemini API 호출 실패 시 세션 데이터만으로 자체 피드백을 생성한다.
+ * 이유: Gemini API는 외부 의존성이므로 네트워크 오류나 할당량 초과 시 실패할 수 있다.
+ * 사용자가 피드백 없이 빈 화면을 보는 것을 방지하기 위해 항상 최소한의 피드백을 제공한다.
+ */
 function generateFallbackFeedback({ totalSeconds, immScore, avgDecibel, poseSummary }) {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const timeText = hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
 
-  // 점수 기반 총평
-  const 총평 = immScore >= 80
+  const summary = immScore >= 80
     ? `${timeText} 동안 높은 집중력을 유지했어요. 오늘의 세션은 성공적이었습니다.`
     : `${timeText} 동안 집중 세션을 완료했어요. 꾸준한 노력이 성장을 만듭니다.`;
 
-  // 긍정 분석
-  const 긍정 = `총 ${timeText} 집중했으며, 몰입도 점수는 ${immScore}점이에요. ` +
+  const positiveAnalysis = `총 ${timeText} 집중했으며, 몰입도 점수는 ${immScore}점이에요. ` +
     (avgDecibel < 50
       ? `주변 소음이 ${avgDecibel}dB로 조용한 환경에서 집중할 수 있었어요.`
       : `평균 소음 ${avgDecibel}dB 환경에서도 집중을 유지한 점이 인상적이에요.`);
 
-  // 자세 불량 건수
   const badPoses = poseSummary
     ? poseSummary.filter(p => p.pose_status !== 'GOOD_POSTURE' && p.pose_status !== 'NORMAL')
     : [];
 
   const totalBadCount = badPoses.reduce((sum, p) => sum + Number(p.count), 0);
 
-  // 보완 사항
-  const 보완 = totalBadCount > 0
+  const improvementNote = totalBadCount > 0
     ? `자세 불량이 총 ${totalBadCount}회 감지되었어요. 허리를 곧게 펴고 모니터와의 거리를 유지해보세요.`
     : `자세 불량이 감지되지 않았어요. 올바른 자세 습관을 계속 유지해주세요.`;
 
-  // 태그
-  const 태그 = [
+  const tags = [
     immScore >= 80 ? '#성공적_집중' : '#집중력_향상중',
     totalBadCount === 0 ? '#자세_완벽' : '#자세주의',
     avgDecibel < 50 ? '#조용한_환경' : '#소음_극복'
   ].join(' ');
 
   return {
-    오늘의총평: 총평,
-    긍정분석: 긍정,
-    보완사항: 보완,
-    집중태그: 태그
+    오늘의총평: summary,
+    긍정분석: positiveAnalysis,
+    보완사항: improvementNote,
+    집중태그: tags
   };
 }
+
 /**
- * 세션 데이터를 바탕으로 Gemini AI 피드백을 생성합니다.
+ * 세션 데이터를 바탕으로 Gemini AI 피드백을 생성한다.
+ * 실패 시 generateFallbackFeedback으로 폴백하여 항상 피드백 객체를 반환한다.
  * @param {Object} sessionData - 세션 데이터
  * @param {number} sessionData.totalSeconds - 총 집중 시간(초)
  * @param {number} sessionData.immScore - 몰입도 점수
  * @param {number} sessionData.avgDecibel - 평균 소음(dB)
  * @param {Array}  sessionData.poseSummary - 자세 기록 [{ pose_status, count }]
  */
-
 async function generateFeedback(sessionData) {
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const { totalSeconds, immScore, avgDecibel, poseSummary } = sessionData;
 
-    // 집중 시간 변환
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const timeText = hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
 
-    // 자세 기록 텍스트 변환
+    // 자세 기록 중 불량 자세만 필터링하여 텍스트로 변환한다.
+    // GOOD_POSTURE / NORMAL은 긍정 상태이므로 보완 항목에 포함하지 않는다.
     const poseText = poseSummary && poseSummary.length > 0
       ? poseSummary
         .filter(p => p.pose_status !== 'GOOD_POSTURE' && p.pose_status !== 'NORMAL')
@@ -122,7 +129,7 @@ async function generateFeedback(sessionData) {
     const result = await model.generateContent(prompt);
     const text = result.response.text();
 
-    // JSON 파싱 (```json 같은 마크다운 제거)
+    // Gemini가 응답을 ```json ... ``` 마크다운 블록으로 감쌀 때가 있으므로 제거 후 파싱한다.
     const clean = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
 

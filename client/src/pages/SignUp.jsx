@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { authApi } from '../shared/api';
+import { useEmailAutocomplete } from '../hooks/useEmailAutocomplete';
 
 /**
  * [회원가입 페이지]
@@ -7,8 +8,6 @@ import { authApi } from '../shared/api';
  * - [UI 개선] 인증 번호 입력창 렌더링 시 발생하는 Layout Shift 방지
  * - [Bug Fix] 이메일 발송 비동기 로딩 스피너 및 이미 가입된 이메일 예외 처리
  */
-const EMAIL_DOMAINS = ['gmail.com', 'naver.com', 'kakao.com', 'daum.net', 'hanmail.net'];
-
 export default function SignUp({ onNavigate, setIsLoggedIn }) {
   const [nick, setNick] = useState('');
   const [email, setEmail] = useState('');
@@ -16,69 +15,20 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
   const [isEmailSent, setIsEmailSent] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
   const [authCode, setAuthCode] = useState('');
-  
   const [isEmailSending, setIsEmailSending] = useState(false);
-  
-  /* 이메일 자동완성 상태 및 키보드 네비게이션 관리 */
-  const [showDomainDropdown, setShowDomainDropdown] = useState(false);
-  const [filteredDomains, setFilteredDomains] = useState(EMAIL_DOMAINS);
-  const [focusedDomainIndex, setFocusedDomainIndex] = useState(-1);
-  const emailInputRef = useRef(null);
-  const dropdownRef = useRef(null);
 
-  /* 이메일 입력 감지 및 도메인 필터링 로직 */
-  const handleEmailChange = (e) => {
-    const val = e.target.value;
-    setEmail(val);
-    
-    if (val.includes('@')) {
-      const [, domainPart] = val.split('@');
-      const filtered = EMAIL_DOMAINS.filter(d => d.startsWith(domainPart));
-      setFilteredDomains(filtered);
-      setShowDomainDropdown(filtered.length > 0 && !isVerified);
-      setFocusedDomainIndex(-1); // 입력이 바뀌면 포커스 인덱스 초기화
-    } else {
-      setShowDomainDropdown(false);
-    }
-  };
-
-  /* 키보드 방향키 제어 로직 */
-  const handleEmailKeyDown = (e) => {
-    if (!showDomainDropdown) return;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setFocusedDomainIndex((prev) => (prev < filteredDomains.length - 1 ? prev + 1 : prev));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setFocusedDomainIndex((prev) => (prev > 0 ? prev - 1 : 0));
-    } else if (e.key === 'Enter' && focusedDomainIndex >= 0) {
-      e.preventDefault();
-      handleDomainSelect(filteredDomains[focusedDomainIndex]);
-    } else if (e.key === 'Escape') {
-      setShowDomainDropdown(false);
-    }
-  };
-
-  /* 추천 도메인 클릭 시 이메일 완성 */
-  const handleDomainSelect = (domain) => {
-    const [idPart] = email.split('@');
-    setEmail(`${idPart}@${domain}`);
-    setShowDomainDropdown(false);
-    setFocusedDomainIndex(-1);
-    emailInputRef.current?.focus(); 
-  };
-
-  /* 외부 클릭 시 드롭다운 닫기 처리를 위한 보완 (onBlur 지연보다 안정적) */
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target) && emailInputRef.current !== e.target) {
-        setShowDomainDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  // 이메일 자동완성 로직은 Login/SignUp에서 동일하므로 커스텀 훅으로 분리했다.
+  // isVerified를 disabled로 전달하여 인증 완료 후에는 드롭다운이 열리지 않도록 한다.
+  const {
+    showDomainDropdown,
+    filteredDomains,
+    focusedDomainIndex,
+    emailInputRef,
+    dropdownRef,
+    handleEmailChange,
+    handleEmailKeyDown,
+    handleDomainSelect,
+  } = useEmailAutocomplete(email, setEmail, isVerified);
 
   const handleNickCheck = async () => {
     if (!nick) return alert("닉네임을 먼저 입력해주세요.");
@@ -96,21 +46,20 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
 
   const handleSendEmail = async () => {
     if (!email || !email.includes('@')) return alert("유효한 이메일을 입력해주세요.");
-    
+
     setIsEmailSending(true);
     try {
       const data = await authApi.sendEmailCode(email);
       if (data && data.success) {
         alert("인증 코드를 발송했습니다. 메일함을 확인해주세요!");
         setIsEmailSent(true);
-        setShowDomainDropdown(false);
       } else {
         alert(data?.message || "이미 가입된 이메일이거나 발송에 실패했습니다.");
       }
-    } catch (err) { 
-      alert("이메일 발송 중 서버 오류가 발생했습니다."); 
+    } catch (err) {
+      alert("이메일 발송 중 서버 오류가 발생했습니다.");
     } finally {
-      setIsEmailSending(false); 
+      setIsEmailSending(false);
     }
   };
 
@@ -168,30 +117,30 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
             <label className="text-xs font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest block mb-2 px-1">이메일 인증</label>
             <div className="flex gap-2 mb-3">
               <div className="relative flex-1">
-                <input 
+                <input
                   ref={emailInputRef}
-                  type="email" 
+                  type="email"
                   name="email"
                   autoComplete="email"
-                  value={email} 
-                  disabled={isVerified || isEmailSending} 
+                  value={email}
+                  disabled={isVerified || isEmailSending}
                   onChange={handleEmailChange}
-                  onKeyDown={handleEmailKeyDown} // 키보드 조작 이벤트 연동
-                  className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 transition-all font-bold text-sm disabled:opacity-50 text-slate-900 dark:text-white" 
-                  placeholder="your@email.com" 
-                  required 
+                  onKeyDown={handleEmailKeyDown}
+                  className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl outline-none focus:border-[#5B44F2] dark:focus:border-indigo-400 transition-all font-bold text-sm disabled:opacity-50 text-slate-900 dark:text-white"
+                  placeholder="your@email.com"
+                  required
                 />
-                
+
                 {/* 도메인 추천 드롭다운 (키보드 하이라이트 UI 반영) */}
                 {showDomainDropdown && (
                   <ul ref={dropdownRef} className="absolute left-0 right-0 top-[110%] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
                     {filteredDomains.map((domain, index) => (
-                      <li 
-                        key={domain} 
+                      <li
+                        key={domain}
                         onClick={() => handleDomainSelect(domain)}
                         className={`px-5 py-3 text-sm font-bold cursor-pointer transition-colors ${
-                          index === focusedDomainIndex 
-                            ? 'bg-[#5B44F2]/10 dark:bg-indigo-500/20 text-[#5B44F2] dark:text-indigo-300 border-l-4 border-[#5B44F2]' 
+                          index === focusedDomainIndex
+                            ? 'bg-[#5B44F2]/10 dark:bg-indigo-500/20 text-[#5B44F2] dark:text-indigo-300 border-l-4 border-[#5B44F2]'
                             : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 border-l-4 border-transparent'
                         }`}
                       >
@@ -201,7 +150,7 @@ export default function SignUp({ onNavigate, setIsLoggedIn }) {
                   </ul>
                 )}
               </div>
-              
+
               <button type="button" onClick={handleSendEmail} disabled={isVerified || isEmailSending} className="w-24 px-4 py-3.5 bg-slate-800 text-white rounded-xl font-black text-xs hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 transition-all disabled:opacity-50 flex items-center justify-center">
                 {isEmailSending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : '코드발송'}
               </button>
